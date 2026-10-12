@@ -100,12 +100,25 @@ class Engine:
                     return original(*args, **kwargs)
 
                 torch.load = patched
+            # Filigrane audio de Chatterbox : si son module natif ne se charge pas (Mac Intel),
+            # on bascule sur le filigrane factice fourni par perth plutôt que d'échouer.
+            try:
+                import perth
+
+                if getattr(perth, "PerthImplicitWatermarker", None) is None:
+                    print("[voxa] Filigrane Perth indisponible sur cette machine : filigrane désactivé.")
+                    perth.PerthImplicitWatermarker = perth.DummyWatermarker
+            except Exception as exc:  # noqa: BLE001
+                print(f"[voxa] Module perth illisible : {exc}")
             from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
             self.model = ChatterboxMultilingualTTS.from_pretrained(device=self.device)
             self.sr = self.model.sr
             self.status = "ready"
         except Exception as exc:  # noqa: BLE001
+            import traceback
+
+            traceback.print_exc()
             self.status, self.error = "error", str(exc)
             print(f"[voxa] Échec du chargement du modèle : {exc}")
 
