@@ -1,23 +1,41 @@
 const KEY = "voxa.settings";
+export const CLOUD_SPACE = "https://resembleai-chatterbox-multilingual-tts.hf.space";
 
-function defaultServer() {
-  const { protocol, origin } = window.location;
-  // Version web servie par le moteur : même origine.
-  if (protocol === "http:" || protocol === "https:") {
-    if (!window.Capacitor?.isNativePlatform?.()) return origin;
-  }
-  return "http://localhost:8000";
+export const isNative = () => !!window.Capacitor?.isNativePlatform?.();
+const servedOverHttp = () => /^https?:$/.test(window.location.protocol) && !isNative();
+
+function stored() {
+  try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; }
 }
 
 export const settings = {
-  server: defaultServer(), apiKey: "", uiLang: "", theme: "auto",
-  ...(() => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } })(),
+  mode: "",                       // "cloud" (moteur de test) ou "local" (mon moteur) ; vide = à déterminer
+  server: servedOverHttp() ? window.location.origin : "http://localhost:8000",
+  apiKey: "", hfToken: "", cloudUrl: CLOUD_SPACE, uiLang: "", theme: "auto",
+  ...stored(),
 };
 
 export function saveSettings(patch) {
   Object.assign(settings, patch);
-  settings.server = settings.server.trim().replace(/\/+$/, "");
+  settings.server = (settings.server || "").trim().replace(/\/+$/, "");
+  settings.cloudUrl = (settings.cloudUrl || CLOUD_SPACE).trim().replace(/\/+$/, "");
   try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* stockage indisponible */ }
+}
+
+/** Premier lancement : si la page est servie par un moteur Voxa, on l'utilise ; sinon, moteur de test cloud. */
+export async function resolveMode() {
+  if (settings.mode) return settings.mode;
+  let mode = "cloud";
+  if (servedOverHttp()) {
+    try {
+      const ctl = new AbortController();
+      setTimeout(() => ctl.abort(), 2500);
+      const r = await fetch(`${window.location.origin}/api/health`, { signal: ctl.signal });
+      if (r.ok && (await r.json()).status) mode = "local";
+    } catch { /* pas de moteur à cette adresse */ }
+  }
+  saveSettings({ mode, server: mode === "local" ? window.location.origin : settings.server });
+  return mode;
 }
 
 export class ApiError extends Error {

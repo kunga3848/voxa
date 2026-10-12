@@ -92,6 +92,22 @@ jobs:
           name: voxa-engine
           path: out/Voxa-Engine.zip
 
+  pages:
+    name: Version web (GitHub Pages)
+    # Lien web de la bêta : https://<compte>.github.io/<dépôt>/
+    # À activer une fois : Settings > Pages > Source : GitHub Actions (dépôt public, ou offre payante pour un dépôt privé).
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions: { pages: write, id-token: write }
+    environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/build.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: app/dist }
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [desktop, android, web]
@@ -105,3 +121,4 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}   # v1.0.0-beta.1 => version bêta

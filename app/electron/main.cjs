@@ -16,6 +16,16 @@ function createWindow() {
 app.whenReady().then(() => {
   // Micro autorisé pour l'enregistrement d'échantillons de voix.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media"));
+  // Moteur de test cloud : l'app est chargée depuis file://, on garantit les en-têtes CORS du Space Hugging Face.
+  session.defaultSession.webRequest.onHeadersReceived({ urls: ["https://*.hf.space/*"] }, (details, cb) => {
+    const headers = { ...details.responseHeaders };
+    for (const k of Object.keys(headers)) if (k.toLowerCase().startsWith("access-control-")) delete headers[k];
+    headers["Access-Control-Allow-Origin"] = ["*"];
+    headers["Access-Control-Allow-Headers"] = ["*"];
+    headers["Access-Control-Allow-Methods"] = ["GET, POST, OPTIONS"];
+    const preflight = details.method === "OPTIONS";
+    cb({ responseHeaders: headers, statusLine: preflight ? "HTTP/1.1 204 No Content" : undefined });
+  });
   createWindow();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });

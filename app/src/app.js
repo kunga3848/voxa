@@ -1,24 +1,28 @@
 import { t, setLang, getLang, applyStatic, errorText } from "./i18n.js";
-import { api, url, settings, saveSettings, ApiError } from "./api.js";
+import { settings, saveSettings, resolveMode, isNative, ApiError } from "./api.js";
+import { engine, LANGUAGES } from "./engine.js";
+import { prepareSample } from "./audio.js";
+import { VERSION } from "./version.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const DRAFT_KEY = "voxa.draft";
-const isNative = () => !!window.Capacitor?.isNativePlatform?.();
 
-const state = { health: null, voices: [], history: [], format: "wav", sample: null, recorder: null };
+const state = { health: null, voices: [], history: [], format: "wav", sample: null, recorder: null, lastError: "" };
 
 /* ---------------------------------------------------------------- utilitaires */
 function toast(msg, kind = "") {
-  const el = document.createElement("div");
-  el.className = `toast ${kind}`;
-  el.textContent = msg;
-  $("#toasts").append(el);
-  setTimeout(() => el.remove(), kind === "error" ? 6000 : 3200);
+  const n = document.createElement("div");
+  n.className = `toast ${kind}`;
+  n.textContent = msg;
+  $("#toasts").append(n);
+  setTimeout(() => n.remove(), kind === "error" ? 7000 : 3200);
 }
 function showError(e) {
   if (e?.name === "AbortError") return;
-  toast(e instanceof ApiError ? errorText(e.code) : errorText(String(e?.message || e)), "error");
+  const code = e instanceof ApiError ? e.code : String(e?.message || e);
+  state.lastError = `${new Date().toISOString()} ${code}`;
+  toast(errorText(code), "error");
 }
 function fmtTime(s) {
   if (!isFinite(s)) s = 0;
@@ -62,6 +66,8 @@ function applyLanguage(l) {
   renderVoiceSelect();
   renderVoiceLists();
   renderHistory();
+  renderCaps();
+  renderModeHint();
   if (state.lastResult) renderResult(state.lastResult);
   else $("#result").innerHTML = `<p class="empty">${t("resultEmpty")}</p>`;
   if (state.sample) renderSample();
@@ -80,29 +86,31 @@ let healthTimer;
 async function pollHealth() {
   clearTimeout(healthTimer);
   const before = state.health?.status;
-  try {
-    state.health = await api("/api/health");
-  } catch {
-    state.health = { status: "offline" };
-  }
+  try { state.health = await engine().health(); } catch { state.health = { status: "offline" }; }
   renderStatus();
-  if (state.health.status !== before && state.health.status === "ready") { loadVoices(); }
-  if (state.health.languages && !$("#language").options.length) renderLanguages();
-  healthTimer = setTimeout(pollHealth, state.health.status === "ready" ? 15000 : 4000);
+  if (state.health.status === "ready" && before !== "ready") loadVoices();
+  renderLanguages();
+  const ready = state.health.status === "ready";
+  healthTimer = setTimeout(pollHealth, ready ? (engine().kind === "cloud" ? 120000 : 15000) : 5000);
 }
 function renderStatus() {
   const s = state.health?.status || "loading";
+  const cloud = engine().kind === "cloud";
   const box = $("#status");
   box.dataset.s = s;
-  const label = { ready: t("statusReady", { device: (state.health?.device || "").toUpperCase() }),
-    loading: t("statusLoading"), offline: t("statusOffline"), error: t("statusError") }[s];
+  const label = cloud
+    ? (s === "ready" ? t("statusCloud") : s === "offline" ? t("statusCloudOffline") : t("statusLoading"))
+    : { ready: t("statusReady", { device: (state.health?.device || "").toUpperCase() }),
+        loading: t("statusLoading"), offline: t("statusOffline"), error: t("statusError") }[s];
   box.querySelector("span").textContent = label;
   box.title = label;
   const banner = $("#banner");
   banner.hidden = s === "ready" || !state.health;
   banner.dataset.kind = s;
-  banner.textContent = s === "offline" ? t("offlineHelp") : s === "loading" ? t("loadingHelp")
+  banner.textContent = cloud ? (s === "offline" ? t("cloudOfflineHelp") : "")
+    : s === "offline" ? t("offlineHelp") : s === "loading" ? t("loadingHelp")
     : s === "error" ? `${t("errors.engine_error")} ${state.health?.error || ""}` : "";
+  if (!banner.textContent) banner.hidden = true;
 }
 
 /* ---------------------------------------------------------------- studio */
@@ -119,13 +127,15 @@ function updateCounters() {
   const text = $("#script").value;
   const n = text.trim().length;
   $("#chars").textContent = t("chars", { n: n.toLocaleString(getLang()) });
-  const secs = n / 14.5 / parseFloat($("#speed").value) + Math.max(0, text.split(/[.!?…]+/).length - 1) * parseFloat($("#pause").value);
+  const speed = engine().caps.speed ? parseFloat($("#speed").value) : 1;
+  const secs = n / 14.5 / speed + Math.max(0, text.split(/[.!?…]+/).length - 1) * parseFloat($("#pause").value);
   $("#estimate").textContent = n ? t("estimate", { d: fmtTime(secs) }) : "";
 }
 function saveDraft() {
   const d = { title: $("#title").value, script: $("#script").value, format: state.format,
     voice: $("#voice").value, language: $("#language").value };
   for (const id of Object.keys(SLIDERS)) d[id] = $(`#${id}`).value;
+  state.draft = d;
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* ignore */ }
 }
 function loadDraft() {
@@ -141,17 +151,31 @@ function setFormat(v) {
   state.format = v;
   $$("#format button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === v)));
 }
+/** Désactive ce que le moteur courant ne sait pas faire (MP3, vitesse en mode test). */
+function renderCaps() {
+  const caps = engine().caps;
+  const mp3 = $('#format [data-v="mp3"]');
+  mp3.disabled = !caps.mp3;
+  if (!caps.mp3 && state.format === "mp3") setFormat("wav");
+  $("#speed").disabled = !caps.speed;
+  $("#speed").closest(".field").classList.toggle("disabled", !caps.speed);
+  $("#cloud-note").hidden = caps.speed && caps.mp3;
+  $("#cloud-note").textContent = t("cloudNote");
+  $("#consent-cloud").hidden = engine().kind !== "cloud";
+  updateCounters();
+}
 function renderLanguages() {
-  const langs = state.health?.languages || { fr: "Français", en: "English" };
+  const langs = state.health?.languages || LANGUAGES;
   const sel = $("#language");
   const current = sel.value || state.draft?.language || (getLang() === "fr" ? "fr" : "en");
+  if (sel.options.length === Object.keys(langs).length) return;
   sel.innerHTML = "";
   for (const [code, name] of Object.entries(langs)) sel.append(el("option", { value: code }, name));
   sel.value = langs[current] ? current : "fr";
 }
 function renderVoiceSelect() {
   const sel = $("#voice");
-  const current = sel.value || state.draft?.voice || "default";
+  const current = state.draft?.voice || sel.value || "default";
   sel.innerHTML = "";
   const lib = state.voices.filter((v) => v.builtin);
   const mine = state.voices.filter((v) => !v.builtin);
@@ -167,27 +191,32 @@ function renderVoiceSelect() {
   sel.value = state.voices.some((v) => v.id === current) ? current : "default";
 }
 
+let generating = null;
 async function generate() {
+  if (generating) return;
   const text = $("#script").value.trim();
   if (!text) return toast(errorText("empty_text"), "error");
   const btn = $("#generate");
   btn.disabled = true;
-  btn.innerHTML = `<span class="spinner"></span><span>${t("generating")}</span>`;
-  const slow = setTimeout(() => toast(t("generatingLong")), 6000);
+  const setLabel = (s) => { btn.innerHTML = `<span class="spinner"></span><span>${s}</span>`; };
+  setLabel(t("generating"));
+  const slow = setTimeout(() => toast(t("generatingLong")), 8000);
+  generating = new AbortController();
   try {
-    const res = await api("/api/tts", { method: "POST", json: {
+    const res = await engine().tts({
       text, title: $("#title").value.trim(), voice: $("#voice").value, language: $("#language").value,
       exaggeration: +$("#exaggeration").value, stability: +$("#stability").value,
-      temperature: +$("#temperature").value, speed: +$("#speed").value, pause: +$("#pause").value,
-      format: state.format,
-    } });
+      temperature: +$("#temperature").value, speed: engine().caps.speed ? +$("#speed").value : 1,
+      pause: +$("#pause").value, format: state.format,
+    }, { signal: generating.signal, onProgress: (i, n) => { if (n > 1) setLabel(t("progress", { i, n })); } });
     if (res._note === "ffmpeg_missing") toast(t("ffmpegNote"));
     state.lastResult = res;
     renderResult(res, true);
-    state.history.unshift(res);
+    state.history = [res, ...state.history.filter((h) => h.id !== res.id)];
   } catch (e) {
     showError(e);
   } finally {
+    generating = null;
     clearTimeout(slow);
     btn.disabled = false;
     btn.innerHTML = `<span>${t("generate")}</span>`;
@@ -207,7 +236,9 @@ function stopOthers(a) {
   if (currentAudio && currentAudio !== a) currentAudio.pause();
   currentAudio = a;
 }
+const peaksCache = new Map();
 async function computePeaks(src, bars) {
+  if (peaksCache.has(src)) return peaksCache.get(src);
   const buf = await (await fetch(src)).arrayBuffer();
   const Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx();
@@ -224,7 +255,9 @@ async function computePeaks(src, bars) {
     peaks[i] = Math.sqrt(sum / step);
     max = Math.max(max, peaks[i]);
   }
-  return peaks.map((p) => (max ? p / max : 0));
+  const norm = peaks.map((p) => (max ? p / max : 0));
+  peaksCache.set(src, norm);
+  return norm;
 }
 function drawWave(canvas, peaks, progress) {
   const dpr = window.devicePixelRatio || 1;
@@ -247,10 +280,9 @@ function drawWave(canvas, peaks, progress) {
   }
 }
 function player(item, { compact = false } = {}) {
-  const src = url(item.audioUrl);
   const audio = new Audio();
   audio.preload = "metadata";
-  audio.src = src;
+  audio.src = item.src;
   const playBtn = el("button", { class: "play", "aria-label": "Play" });
   playBtn.innerHTML = ICONS.play;
   const canvas = el("canvas", { class: "wave" });
@@ -267,7 +299,7 @@ function player(item, { compact = false } = {}) {
     if (audio.duration) { audio.currentTime = ((e.clientX - r.left) / r.width) * audio.duration; tick(); }
   });
   new ResizeObserver(redraw).observe(canvas);
-  computePeaks(src, 400).then((p) => { peaks = p; redraw(); }).catch(() => {});
+  computePeaks(item.src, 400).then((p) => { peaks = p; redraw(); }).catch(() => {});
 
   const actions = el("div", { class: "actions" },
     el("button", { class: "ghost", onclick: () => saveAudio(item) }, icon(isNative() ? "share" : "download"),
@@ -286,10 +318,10 @@ function player(item, { compact = false } = {}) {
 
 async function saveAudio(item) {
   try {
-    const res = await fetch(url(item.audioUrl));
+    const res = await fetch(item.src);
     if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
     const blob = await res.blob();
-    const name = `${(item.title || "voxa").replace(/[^\w\- ]+/g, "").trim().slice(0, 40) || "voxa"}.${item.format}`;
+    const name = `${(item.title || "voxa").replace(/[^\p{L}\p{N}\- ]+/gu, "").trim().slice(0, 40) || "voxa"}.${item.format}`;
     if (isNative()) {
       const { Filesystem, Share } = window.Capacitor.Plugins;
       const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.readAsDataURL(blob); });
@@ -305,7 +337,7 @@ async function saveAudio(item) {
 
 /* ---------------------------------------------------------------- voix */
 async function loadVoices() {
-  try { state.voices = await api("/api/voices"); } catch (e) { if (e.code !== "network") showError(e); return; }
+  try { state.voices = await engine().voices(); } catch (e) { if (e.code !== "network") showError(e); return; }
   renderVoiceSelect();
   renderVoiceLists();
 }
@@ -317,13 +349,13 @@ function renderVoiceLists() {
     el("span", { class: "avatar", "aria-hidden": "true" }, (v.name || "?").slice(0, 1).toUpperCase()),
     el("div", { class: "voice-info" }, el("b", {}, v.id === "default" ? t("defaultVoice") : v.name),
       el("span", {}, [v.description && v.description !== "default" ? v.description : "", v.created ? fmtDate(v.created) : ""].filter(Boolean).join(" — "))),
-    v.previewUrl ? el("button", { class: "icon-btn", "aria-label": t("preview"), title: t("preview"), onclick: () => {
-      stopOthers(previewAudio); previewAudio.src = url(v.previewUrl); previewAudio.play().catch(showError);
+    v.previewSrc ? el("button", { class: "icon-btn", "aria-label": t("preview"), title: t("preview"), onclick: () => {
+      stopOthers(previewAudio); previewAudio.src = v.previewSrc; previewAudio.play().catch(showError);
     } }, icon("play")) : null,
     el("button", { class: "ghost", onclick: () => { $("#voice").value = v.id; saveDraft(); showTab("studio"); } }, t("use")),
     !v.builtin ? el("button", { class: "icon-btn danger", "aria-label": t("delete"), title: t("delete"), onclick: async () => {
       if (!confirm(t("deleteVoiceConfirm", { name: v.name }))) return;
-      try { await api(`/api/voices/${v.id}`, { method: "DELETE" }); await loadVoices(); } catch (e) { showError(e); }
+      try { await engine().deleteVoice(v.id); await loadVoices(); } catch (e) { showError(e); }
     } }, icon("trash")) : null);
 
   const mine = state.voices.filter((v) => !v.builtin);
@@ -339,8 +371,7 @@ function renderSample() {
   s.hidden = !state.sample;
   if (!state.sample) return;
   s.innerHTML = "";
-  const a = el("audio", { controls: true, src: state.sample.url });
-  s.append(el("span", {}, t("sampleReady", { name: state.sample.name })), a);
+  s.append(el("span", {}, t("sampleReady", { name: state.sample.name })), el("audio", { controls: true, src: state.sample.url }));
 }
 function setSample(blob, name) {
   if (state.sample?.url) URL.revokeObjectURL(state.sample.url);
@@ -383,13 +414,18 @@ async function createVoice(e) {
   const btn = $("#v-create");
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner"></span><span>${t("creatingVoice")}</span>`;
-  const form = new FormData();
-  form.append("name", name);
-  form.append("description", $("#v-desc").value.trim());
-  form.append("consent", "true");
-  form.append("sample", state.sample.blob, state.sample.name);
   try {
-    const v = await api("/api/voices", { method: "POST", form });
+    // Nettoyage côté appareil : mono 24 kHz, silences retirés, 30 s max.
+    let blob = state.sample.blob, filename = state.sample.name;
+    try {
+      const prepared = await prepareSample(blob);
+      if (prepared.seconds < 4) throw new ApiError("sample_too_short", 400);
+      blob = prepared.blob; filename = "sample.wav";
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      if (engine().kind === "cloud") throw new ApiError("bad_audio", 400); // le moteur local saura peut-être le lire
+    }
+    const v = await engine().createVoice({ name, description: $("#v-desc").value.trim(), blob, filename });
     toast(t("voiceCreated", { name: v.name }));
     $("#clone-form").reset();
     setSample(null);
@@ -400,7 +436,7 @@ async function createVoice(e) {
 
 /* ---------------------------------------------------------------- historique */
 async function loadHistory() {
-  try { state.history = await api("/api/history"); } catch (e) { if (e.code !== "network") showError(e); }
+  try { state.history = await engine().history(); } catch (e) { if (e.code !== "network") showError(e); }
   renderHistory();
 }
 function renderHistory() {
@@ -422,7 +458,7 @@ function renderHistory() {
         el("button", { class: "icon-btn", title: isNative() ? t("share") : t("download"), "aria-label": t("download"), onclick: () => saveAudio(item) }, icon(isNative() ? "share" : "download")),
         el("button", { class: "icon-btn danger", title: t("delete"), "aria-label": t("delete"), onclick: async () => {
           if (!confirm(t("deleteItemConfirm"))) return;
-          try { await api(`/api/history/${item.id}`, { method: "DELETE" }); state.history = state.history.filter((h) => h.id !== item.id); renderHistory(); }
+          try { await engine().deleteItem(item.id); state.history = state.history.filter((h) => h.id !== item.id); renderHistory(); }
           catch (e) { showError(e); }
         } }, icon("trash"))));
     list.append(el("li", {}, head, p.node, el("p", { class: "h-text" }, item.text)));
@@ -430,19 +466,42 @@ function renderHistory() {
 }
 
 /* ---------------------------------------------------------------- réglages */
+let pendingMode = "";
+function renderModeHint() {
+  const m = pendingMode || settings.mode || "cloud";
+  $$("#s-mode button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === m)));
+  $("#s-mode-hint").textContent = m === "cloud" ? t("modeCloudHint") : t("modeLocalHint");
+  $("#local-fields").hidden = m !== "local";
+  $("#cloud-fields").hidden = m !== "cloud";
+}
 function fillSettings() {
+  pendingMode = settings.mode || "cloud";
   $("#s-server").value = settings.server;
   $("#s-key").value = settings.apiKey;
+  $("#s-hf").value = settings.hfToken;
   $$("#s-theme button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === settings.theme)));
+  renderModeHint();
+}
+async function copyReport() {
+  const report = [
+    `Voxa ${VERSION}`, `Moteur : ${engine().kind} (${engine().kind === "cloud" ? settings.cloudUrl : settings.server})`,
+    `Statut : ${state.health?.status || "?"} ${state.health?.device || ""}`,
+    `Plateforme : ${isNative() ? "Android" : navigator.userAgent}`,
+    `Langue : ${getLang()}`, `Dernière erreur : ${state.lastError || "aucune"}`,
+  ].join("\n");
+  try { await navigator.clipboard.writeText(report); toast(t("feedbackCopied")); }
+  catch { prompt(t("feedback"), report); }
 }
 
 /* ---------------------------------------------------------------- démarrage */
-function init() {
+async function init() {
   const nav = (navigator.language || "fr").slice(0, 2);
   applyTheme();
+  $("#version").textContent = `Voxa ${VERSION} · Chatterbox Multilingual (MIT)`;
   loadDraft();
   renderLanguages();
   $$(".controls input[type=range]").forEach((i) => { paintSlider(i); i.addEventListener("input", () => { paintSlider(i); updateCounters(); saveDraft(); }); });
+  await resolveMode();
   applyLanguage(settings.uiLang || (nav === "fr" ? "fr" : "en"));
   fillSettings();
 
@@ -452,7 +511,7 @@ function init() {
   $("#title").addEventListener("input", saveDraft);
   $("#voice").addEventListener("change", saveDraft);
   $("#language").addEventListener("change", saveDraft);
-  $$("#format button").forEach((b) => b.addEventListener("click", () => { setFormat(b.dataset.v); saveDraft(); }));
+  $$("#format button").forEach((b) => b.addEventListener("click", () => { if (!b.disabled) { setFormat(b.dataset.v); saveDraft(); } }));
   $("#generate").addEventListener("click", generate);
   $("#script").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate(); });
 
@@ -460,18 +519,22 @@ function init() {
   $("#v-record").addEventListener("click", toggleRecord);
   $("#clone-form").addEventListener("submit", createVoice);
 
+  $$("#s-mode button").forEach((b) => b.addEventListener("click", () => { pendingMode = b.dataset.v; renderModeHint(); }));
   $$("#s-theme button").forEach((b) => b.addEventListener("click", () => {
     $$("#s-theme button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
   }));
+  $("#feedback").addEventListener("click", copyReport);
   $("#settings-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const theme = $("#s-theme [aria-checked=true]")?.dataset.v || "auto";
-    saveSettings({ server: $("#s-server").value || "http://localhost:8000", apiKey: $("#s-key").value.trim(), theme });
-    applyTheme(); fillSettings(); toast(t("saved"));
-    state.voices = []; pollHealth(); loadVoices(); loadHistory();
+    saveSettings({ mode: pendingMode, server: $("#s-server").value || "http://localhost:8000",
+      apiKey: $("#s-key").value.trim(), hfToken: $("#s-hf").value.trim(), theme });
+    applyTheme(); fillSettings(); renderCaps(); toast(t("saved"));
+    state.voices = []; state.health = null; renderStatus();
+    pollHealth(); loadVoices(); loadHistory();
   });
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => $$("canvas.wave").forEach((c) => c.dispatchEvent(new Event("resize"))));
 
+  renderCaps();
   pollHealth();
   loadVoices();
   loadHistory();

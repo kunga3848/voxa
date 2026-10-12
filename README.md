@@ -1,5 +1,35 @@
 # Voxa — voix off réalistes et clonage de voix
 
+> **Version actuelle : 1.0.0-beta.1 (bêta de test)**
+
+## Bêta : tester sans rien installer
+
+La bêta fonctionne en **mode test (cloud)** par défaut : l'app utilise le moteur public Chatterbox Multilingual hébergé par Resemble AI sur Hugging Face. Les testeurs n'ont ni moteur à installer ni carte graphique à avoir.
+
+| | Mode test (cloud) | Mon moteur |
+|---|---|---|
+| Installation | Aucune | Moteur Voxa sur un PC NVIDIA, un Mac M1+ ou un serveur |
+| Quota | Quota GPU gratuit limité par jour (plus élevé avec un jeton Hugging Face gratuit) | Illimité |
+| Formats | WAV | WAV et MP3 |
+| Vitesse | Non appliquée | Oui |
+| Voix clonées et historique | Gardés sur l'appareil du testeur | Sur le moteur, partagés entre appareils |
+| Confidentialité | Textes et échantillons envoyés aux serveurs Hugging Face | Tout reste chez toi |
+
+On bascule dans **Réglages › Moteur de voix**. Le mode test dépend d'un service public tiers : il peut être lent, saturé ou changer sans préavis. Il sert aux tests, pas à la production.
+
+**Faire un retour** : Réglages › « Signaler un problème » copie un rapport technique (version, moteur, dernière erreur) à coller dans le message.
+
+### Publier une nouvelle bêta
+
+```
+git tag v1.0.0-beta.2 && git push --tags
+```
+GitHub fabrique le .exe, le .dmg, l'.apk et le paquet moteur, puis crée une **pré-version** (Releases) avec tous les fichiers. La version web est publiée sur GitHub Pages si elle est activée (Settings › Pages › Source : GitHub Actions ; gratuit pour un dépôt public).
+
+Pense à mettre à jour `app/package.json` (`version`) et `app/src/version.js` avant chaque tag.
+
+---
+
 Voxa se compose de deux parties :
 
 - **Le moteur** (`engine/`) : un serveur Python qui fait tourner le modèle **Chatterbox Multilingual** (Resemble AI, licence MIT : usage commercial autorisé). Il génère les voix off, clone les voix et garde l'historique. C'est lui qui a besoin d'une machine puissante.

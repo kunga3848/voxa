@@ -47,8 +47,26 @@ export const STRINGS = {
       mic: "Accès au micro refusé. Autorise-le dans les réglages de ton appareil.",
       empty_text: "Écris un texte avant de générer.",
       no_sample: "Ajoute un échantillon audio : importe un fichier ou enregistre-toi.",
+      quota: "Quota gratuit du moteur de test atteint pour aujourd'hui. Ajoute un jeton Hugging Face dans Réglages, réessaie plus tard, ou passe sur ton propre moteur.",
+      hf_token: "Jeton Hugging Face refusé. Vérifie-le dans Réglages ou efface-le.",
+      cloud_unreachable: "Impossible de joindre le moteur de test. Vérifie ta connexion Internet.",
+      cloud_error: "Le moteur de test a renvoyé une erreur. Réessaie avec un texte plus court.",
       generic: "Une erreur est survenue : {msg}",
     },
+    beta: "Bêta",
+    engineMode: "Moteur de voix",
+    modeCloud: "Moteur de test (cloud)", modeLocal: "Mon moteur",
+    modeCloudHint: "Aucune installation. Utilise le moteur public Chatterbox sur Hugging Face : quota gratuit limité chaque jour, voix et historique gardés sur cet appareil.",
+    modeLocalHint: "Ton propre moteur Voxa (start.bat ou start.sh) : illimité, MP3, vitesse, voix partagées entre tes appareils.",
+    hfToken: "Jeton Hugging Face (facultatif)",
+    hfTokenHint: "Augmente le quota du moteur de test. Crée un jeton gratuit sur huggingface.co › Settings › Access Tokens.",
+    cloudNote: "Moteur de test : WAV uniquement, vitesse non appliquée.",
+    progress: "Génération… {i}/{n}",
+    statusCloud: "Moteur de test · cloud", statusCloudOffline: "Moteur de test injoignable",
+    cloudOfflineHelp: "Le moteur de test sur Hugging Face ne répond pas (redémarrage ou maintenance). Réessaie dans quelques minutes.",
+    consentCloud: "En mode test, l'échantillon est envoyé aux serveurs Hugging Face à chaque génération avec cette voix.",
+    feedback: "Signaler un problème", feedbackHint: "Copie un rapport technique à joindre à ton message.",
+    feedbackCopied: "Rapport copié. Colle-le dans ton message au développeur.",
     ffmpegNote: "FFmpeg absent sur le moteur : fichier livré en WAV, vitesse non appliquée.",
   },
   en: {
@@ -99,8 +117,26 @@ export const STRINGS = {
       mic: "Microphone access denied. Allow it in your device settings.",
       empty_text: "Write a script before generating.",
       no_sample: "Add an audio sample: import a file or record yourself.",
+      quota: "The test engine's free quota is used up for today. Add a Hugging Face token in Settings, try later, or switch to your own engine.",
+      hf_token: "Hugging Face token rejected. Check it in Settings or clear it.",
+      cloud_unreachable: "Can't reach the test engine. Check your internet connection.",
+      cloud_error: "The test engine returned an error. Try again with a shorter text.",
       generic: "Something went wrong: {msg}",
     },
+    beta: "Beta",
+    engineMode: "Voice engine",
+    modeCloud: "Test engine (cloud)", modeLocal: "My engine",
+    modeCloudHint: "Nothing to install. Uses the public Chatterbox engine on Hugging Face: limited free daily quota, voices and history kept on this device.",
+    modeLocalHint: "Your own Voxa engine (start.bat or start.sh): unlimited, MP3, speed, voices shared across your devices.",
+    hfToken: "Hugging Face token (optional)",
+    hfTokenHint: "Raises the test engine quota. Create a free token at huggingface.co › Settings › Access Tokens.",
+    cloudNote: "Test engine: WAV only, speed not applied.",
+    progress: "Generating… {i}/{n}",
+    statusCloud: "Test engine · cloud", statusCloudOffline: "Test engine unreachable",
+    cloudOfflineHelp: "The Hugging Face test engine isn't responding (restarting or under maintenance). Try again in a few minutes.",
+    consentCloud: "In test mode, the sample is sent to Hugging Face servers each time you generate with this voice.",
+    feedback: "Report a problem", feedbackHint: "Copies a technical report to attach to your message.",
+    feedbackCopied: "Report copied. Paste it into your message to the developer.",
     ffmpegNote: "FFmpeg missing on the engine: delivered as WAV, speed not applied.",
   },
 };
@@ -119,6 +155,8 @@ export function t(key, vars = {}) {
 }
 
 export function errorText(code) {
+  code = String(code || "");
+  if (code.startsWith("cloud_error:")) return `${STRINGS[lang].errors.cloud_error} (${code.slice(12)})`;
   const known = STRINGS[lang].errors[code];
   return known || t("errors.generic", { msg: code });
 }

@@ -17,6 +17,7 @@
     <div class="brand">
       <svg viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="11" width="3" height="6" rx="1.5"/><rect x="9" y="6" width="3" height="16" rx="1.5"/><rect x="15" y="3" width="3" height="22" rx="1.5"/><rect x="21" y="9" width="3" height="10" rx="1.5"/></svg>
       <span>voxa</span>
+      <span class="beta" data-i18n="beta"></span>
     </div>
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="studio" aria-selected="true">
@@ -91,6 +92,7 @@
           </div>
 
           <button class="primary" id="generate"><span data-i18n="generate"></span></button>
+          <small class="muted note" id="cloud-note" hidden></small>
         </aside>
       </div>
 
@@ -123,7 +125,7 @@
           <div class="sample-state" id="v-sample" hidden></div>
           <label class="consent">
             <input type="checkbox" id="v-consent">
-            <span data-i18n="consent"></span>
+            <span><span data-i18n="consent"></span> <span class="muted" id="consent-cloud" data-i18n="consentCloud" hidden></span></span>
           </label>
           <button class="primary" id="v-create" type="submit"><span data-i18n="createVoice"></span></button>
         </form>
@@ -140,16 +142,33 @@
     <!-- RÉGLAGES -->
     <section class="view" id="view-settings" hidden>
       <form class="narrow settings" id="settings-form">
-        <label class="field">
-          <span data-i18n="server"></span>
-          <input id="s-server" inputmode="url" autocomplete="off" spellcheck="false">
-          <small data-i18n="serverHint"></small>
-        </label>
-        <label class="field">
-          <span data-i18n="apiKey"></span>
-          <input id="s-key" type="password" autocomplete="off">
-          <small data-i18n="apiKeyHint"></small>
-        </label>
+        <div class="field">
+          <span data-i18n="engineMode"></span>
+          <div class="seg" id="s-mode" role="radiogroup">
+            <button type="button" role="radio" data-v="cloud" data-i18n="modeCloud"></button>
+            <button type="button" role="radio" data-v="local" data-i18n="modeLocal"></button>
+          </div>
+          <small id="s-mode-hint"></small>
+        </div>
+        <div id="cloud-fields" class="group">
+          <label class="field">
+            <span data-i18n="hfToken"></span>
+            <input id="s-hf" type="password" autocomplete="off" placeholder="hf_…">
+            <small data-i18n="hfTokenHint"></small>
+          </label>
+        </div>
+        <div id="local-fields" class="group">
+          <label class="field">
+            <span data-i18n="server"></span>
+            <input id="s-server" inputmode="url" autocomplete="off" spellcheck="false">
+            <small data-i18n="serverHint"></small>
+          </label>
+          <label class="field">
+            <span data-i18n="apiKey"></span>
+            <input id="s-key" type="password" autocomplete="off">
+            <small data-i18n="apiKeyHint"></small>
+          </label>
+        </div>
         <div class="field">
           <span data-i18n="theme"></span>
           <div class="seg" id="s-theme" role="radiogroup">
@@ -159,7 +178,11 @@
           </div>
         </div>
         <button class="primary" type="submit"><span data-i18n="save"></span></button>
-        <p class="muted version">Voxa 1.0 · Chatterbox Multilingual (MIT)</p>
+        <div class="field feedback">
+          <button type="button" class="ghost" id="feedback"><span data-i18n="feedback"></span></button>
+          <small data-i18n="feedbackHint"></small>
+        </div>
+        <p class="muted version" id="version"></p>
       </form>
     </section>
   </main>
