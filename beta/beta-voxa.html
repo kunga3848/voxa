@@ -1,0 +1,478 @@
+<title>Bêta Voxa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout : colonne de lecture unique, 4 étapes réelles (installer → activer → tester → répondre), panneau des retours pour la propriétaire en bas. Identité reprise de l'app Voxa. */
+:root {
+  --bg: #F2F3F6;
+  --sheet: #FFFFFF;
+  --ink: #161B26;
+  --muted: #5F687B;
+  --line: #DCE0E7;
+  --soft: #E8EAF0;
+  --accent: #2E43D1;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E3E7FB;
+  --wave: #B9C1EA;
+  --ok: #1E7F53;
+  --ok-soft: #DDF2E7;
+  --warn: #9A5B00;
+  --warn-soft: #FBEFD9;
+  --danger: #B3302A;
+  --font: "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141A; --sheet: #191D25; --ink: #E7EAF0; --muted: #949CAE; --line: #2A303B; --soft: #222833;
+    --accent: #8394FF; --accent-ink: #0E1220; --accent-soft: #232A48; --wave: #3A4370;
+    --ok: #4CC38A; --ok-soft: #173126; --warn: #E8B05A; --warn-soft: #33281A; --danger: #FF7B72;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141A; --sheet: #191D25; --ink: #E7EAF0; --muted: #949CAE; --line: #2A303B; --soft: #222833;
+  --accent: #8394FF; --accent-ink: #0E1220; --accent-soft: #232A48; --wave: #3A4370;
+  --ok: #4CC38A; --ok-soft: #173126; --warn: #E8B05A; --warn-soft: #33281A; --danger: #FF7B72;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 760px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; display: flex; flex-direction: column; gap: 28px; }
+a { color: var(--accent); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; letter-spacing: -0.02em; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ---------- En-tête ---------- */
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 20px; letter-spacing: -0.02em; }
+.brand svg { width: 26px; height: 26px; stroke: none; fill: var(--accent); }
+.pill { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.hero { display: flex; flex-direction: column; gap: 14px; }
+.hero h1 { font-size: clamp(30px, 6vw, 42px); line-height: 1.12; }
+.hero p { font-size: 18px; color: var(--muted); max-width: 60ch; }
+.wave { display: flex; align-items: center; gap: 3px; height: 44px; }
+.wave i { width: 4px; border-radius: 2px; background: var(--wave); }
+.wave i:nth-child(-n+14) { background: var(--accent); }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; color: var(--muted); }
+.facts b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Étapes ---------- */
+.step { background: var(--sheet); border-radius: 18px; box-shadow: 0 0 0 1px var(--line); padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.step-head { display: flex; align-items: baseline; gap: 12px; }
+.num { font-family: var(--mono); font-size: 13px; color: var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 2px 8px; flex: none; }
+.step h2 { font-size: 22px; }
+.step > p { color: var(--muted); }
+
+.downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dl { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); min-width: 0; }
+.dl:hover { border-color: var(--accent); }
+.dl b { display: block; font-weight: 600; }
+.dl span { font-size: 13px; color: var(--muted); display: block; overflow-wrap: anywhere; }
+.dl svg { color: var(--accent); }
+details { border-top: 1px solid var(--soft); padding-top: 12px; }
+summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+details ul { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 15px; }
+
+ol.howto { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+ol.howto li::marker { color: var(--accent); font-weight: 600; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--soft); padding: 1px 6px; border-radius: 6px; }
+.note { font-size: 14px; padding: 12px 14px; border-radius: 10px; background: var(--warn-soft); color: var(--ink); }
+
+/* ---------- Missions ---------- */
+.missions { display: flex; flex-direction: column; gap: 4px; }
+.mission { display: flex; gap: 12px; align-items: flex-start; padding: 10px 4px; border-bottom: 1px solid var(--soft); cursor: pointer; }
+.mission:last-child { border-bottom: 0; }
+.mission input { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--accent); flex: none; }
+.mission b { display: block; font-weight: 600; }
+.mission small { color: var(--muted); font-size: 14px; }
+.mission:has(input:checked) b { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--muted); }
+.progress { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- Formulaire ---------- */
+form { display: flex; flex-direction: column; gap: 18px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field > span, legend { font-size: 14px; font-weight: 600; }
+.field small { color: var(--muted); font-size: 13px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+input[type="text"], select, textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); color: var(--ink); font: inherit; font-size: 15px;
+}
+textarea { min-height: 88px; resize: vertical; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.scale { display: flex; gap: 6px; flex-wrap: wrap; }
+.scale label { position: relative; }
+.scale input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.scale span { display: grid; place-items: center; width: 44px; height: 40px; border-radius: 10px; border: 1px solid var(--line); font-weight: 600; font-variant-numeric: tabular-nums; }
+.scale input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.scale input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scale-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); max-width: 260px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.primary { border: 0; border-radius: 999px; padding: 13px 22px; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 600; cursor: pointer; }
+.primary:disabled { opacity: .55; cursor: progress; }
+.ghost { border: 1px solid var(--line); background: var(--sheet); color: var(--ink); border-radius: 999px; padding: 11px 18px; font: inherit; font-weight: 500; cursor: pointer; }
+.ghost:hover { border-color: var(--muted); }
+.status { font-size: 14px; padding: 10px 14px; border-radius: 10px; }
+.status.ok { background: var(--ok-soft); color: var(--ok); }
+.status.warn { background: var(--warn-soft); color: var(--ink); }
+.copybox { font-family: var(--mono); font-size: 13px; min-height: 160px; }
+
+/* ---------- Retours (propriétaire) ---------- */
+.stats { display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: 14px; color: var(--muted); }
+.stats b { font-size: 22px; color: var(--ink); font-variant-numeric: tabular-nums; display: block; letter-spacing: -0.02em; }
+.fb { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.fb-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; font-size: 14px; color: var(--muted); }
+.fb-head strong { color: var(--ink); font-size: 16px; }
+.chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--ink); font-variant-numeric: tabular-nums; }
+.chip.bug { background: var(--warn-soft); color: var(--warn); }
+.fb dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 15px; }
+.fb dt { color: var(--muted); }
+.fb dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.empty { color: var(--muted); font-size: 15px; }
+
+footer { font-size: 13px; color: var(--muted); text-align: center; }
+
+@media (max-width: 560px) {
+  .wrap { padding-inline: 16px; }
+  .downloads, .two { grid-template-columns: 1fr; }
+  .step { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="brand">
+      <svg viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="11" width="3" height="6" rx="1.5"/><rect x="9" y="6" width="3" height="16" rx="1.5"/><rect x="15" y="3" width="3" height="22" rx="1.5"/><rect x="21" y="9" width="3" height="10" rx="1.5"/></svg>
+      <span>voxa</span><span class="pill">Bêta 1.0.0-beta.1</span>
+    </div>
+    <h1>Merci de tester Voxa avant tout le monde</h1>
+    <p>Voxa transforme un texte en voix off réaliste et peut cloner une voix à partir de quelques secondes d'enregistrement. Il te faut environ 20 minutes : installer l'app, faire quelques essais, puis nous dire ce qui marche et ce qui coince.</p>
+    <div class="wave" aria-hidden="true" id="wave"></div>
+    <div class="facts">
+      <span><b>23</b> langues, dont français et anglais</span>
+      <span><b>10 à 30 s</b> d'audio pour cloner une voix</span>
+      <span>Windows · macOS · Android</span>
+    </div>
+  </header>
+
+  <section class="step" aria-labelledby="s1">
+    <div class="step-head"><span class="num">1/4</span><h2 id="s1">Installe l'app</h2></div>
+    <p>Choisis le fichier qui correspond à ton appareil. Le téléchargement s'ouvre sur GitHub.</p>
+    <div class="downloads">
+      <a class="dl" href="https://github.com/kunga3848/voxa/releases/download/v1.0.0-beta.1/Voxa-Setup-1.0.0-beta.1.exe" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>
+        <div><b>Windows</b><span>Voxa-Setup-1.0.0-beta.1.exe</span></div></a>
+      <a class="dl" href="https://github.com/kunga3848/voxa/releases/download/v1.0.0-beta.1/Voxa-v1.0.0-beta.1.apk" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>
+        <div><b>Android</b><span>Voxa-v1.0.0-beta.1.apk</span></div></a>
+      <a class="dl" href="https://github.com/kunga3848/voxa/releases/download/v1.0.0-beta.1/Voxa-1.0.0-beta.1-arm64.dmg" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>
+        <div><b>Mac M1, M2, M3, M4</b><span>Voxa-1.0.0-beta.1-arm64.dmg</span></div></a>
+      <a class="dl" href="https://github.com/kunga3848/voxa/releases/download/v1.0.0-beta.1/Voxa-1.0.0-beta.1-x64.dmg" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>
+        <div><b>Mac Intel</b><span>Voxa-1.0.0-beta.1-x64.dmg</span></div></a>
+    </div>
+    <details>
+      <summary>L'installation est bloquée ?</summary>
+      <ul>
+        <li><b>Windows</b> : sur l'écran bleu SmartScreen, clique sur « Informations complémentaires », puis « Exécuter quand même ».</li>
+        <li><b>Mac</b> : glisse Voxa dans Applications. Au premier lancement, fais clic droit sur Voxa › Ouvrir. Si macOS refuse encore, va dans Réglages Système › Confidentialité et sécurité › « Ouvrir quand même ».</li>
+        <li><b>Android</b> : autorise l'installation d'applications provenant de ton navigateur quand le téléphone le demande.</li>
+      </ul>
+      <p class="muted" style="margin-top:10px;font-size:14px">Ces avertissements viennent du fait que la bêta n'est pas encore signée par Apple, Microsoft ou Google.</p>
+    </details>
+  </section>
+
+  <section class="step" aria-labelledby="s2">
+    <div class="step-head"><span class="num">2/4</span><h2 id="s2">Active le moteur de voix</h2></div>
+    <p>Pendant la bêta, les voix sont générées par le moteur Chatterbox hébergé sur Hugging Face. Il demande un jeton gratuit, à créer une seule fois.</p>
+    <ol class="howto">
+      <li>Crée un compte gratuit sur <a href="https://huggingface.co/join" target="_blank" rel="noopener">huggingface.co</a>.</li>
+      <li>Ouvre <a href="https://huggingface.co/settings/tokens/new?tokenType=read" target="_blank" rel="noopener">Settings › Access Tokens › New token</a>, laisse le type <b>Read</b>, donne-lui le nom <code>voxa</code> et clique sur <b>Create token</b>.</li>
+      <li>Copie le jeton, qui commence par <code>hf_</code>.</li>
+      <li>Dans Voxa, ouvre <b>Réglages</b>, colle-le dans <b>Jeton Hugging Face</b> et clique sur <b>Enregistrer</b>.</li>
+    </ol>
+    <p class="note">Le quota gratuit permet quelques minutes de génération par jour. Si Voxa affiche « quota atteint », note-le dans ton retour et réessaie le lendemain.</p>
+  </section>
+
+  <section class="step" aria-labelledby="s3">
+    <div class="step-head"><span class="num">3/4</span><h2 id="s3">Fais les missions de test</h2></div>
+    <p>Coche au fur et à mesure. Tes cases sont gardées dans ce navigateur et jointes à ton retour.</p>
+    <div class="missions" id="missions"></div>
+    <p class="progress" id="progress"></p>
+  </section>
+
+  <section class="step" aria-labelledby="s4">
+    <div class="step-head"><span class="num">4/4</span><h2 id="s4">Donne ton avis</h2></div>
+    <p id="fb-intro">Sois franc : un bug signalé maintenant, c'est un problème en moins à la sortie.</p>
+    <form id="feedback" novalidate>
+      <div class="two">
+        <label class="field"><span>Ton prénom ou pseudo</span><input type="text" id="f-name" maxlength="60" autocomplete="nickname"></label>
+        <label class="field"><span>Appareil utilisé</span>
+          <select id="f-device">
+            <option value="">Choisir…</option>
+            <option>Windows</option><option>Mac M1 et plus</option><option>Mac Intel</option><option>Android</option><option>Plusieurs</option>
+          </select>
+        </label>
+      </div>
+      <fieldset>
+        <legend>Les voix sonnent-elles naturelles ?</legend>
+        <div class="scale" id="f-realism"></div>
+        <div class="scale-ends"><span>Robotique</span><span>On dirait un humain</span></div>
+      </fieldset>
+      <fieldset>
+        <legend>L'app est-elle simple à utiliser ?</legend>
+        <div class="scale" id="f-ease"></div>
+        <div class="scale-ends"><span>J'ai galéré</span><span>Évident</span></div>
+      </fieldset>
+      <fieldset>
+        <legend>Le clonage de ta voix t'a-t-il convaincu ?</legend>
+        <div class="scale" id="f-clone"></div>
+        <div class="scale-ends"><span>Pas du tout</span><span>Bluffant</span></div>
+      </fieldset>
+      <label class="field"><span>Ce qui t'a plu</span><textarea id="f-good" maxlength="2000"></textarea></label>
+      <label class="field"><span>Bugs ou blocages</span><textarea id="f-bugs" maxlength="3000" placeholder="Ce que tu faisais, ce qui s'est passé, le message affiché."></textarea></label>
+      <label class="field"><span>Ce qu'il faudrait ajouter ou changer</span><textarea id="f-ideas" maxlength="2000"></textarea></label>
+      <label class="field"><span>Rapport technique (facultatif)</span>
+        <textarea id="f-report" maxlength="3000" placeholder="Dans Voxa : Réglages › Signaler un problème, puis colle ici."></textarea>
+        <small>Il contient la version de l'app, ton appareil et la dernière erreur. Aucune donnée personnelle.</small>
+      </label>
+      <div class="actions">
+        <button class="primary" type="submit" id="f-submit">Envoyer mon retour</button>
+        <button class="ghost" type="button" id="f-copy">Copier mon retour</button>
+      </div>
+      <div class="status" id="f-status" hidden></div>
+      <textarea class="copybox" id="f-copybox" readonly hidden aria-label="Ton retour en texte"></textarea>
+    </form>
+  </section>
+
+  <section class="step" id="owner" aria-labelledby="s5" hidden>
+    <div class="step-head"><h2 id="s5">Retours reçus</h2></div>
+    <p>Visible par toi seul. Les retours arrivent en direct.</p>
+    <div class="stats" id="stats"></div>
+    <div id="fb-list"><p class="empty">Aucun retour pour l'instant. Invite tes testeurs par e-mail comme Éditeurs depuis le menu Partager pour qu'ils puissent répondre ici.</p></div>
+  </section>
+
+  <footer>Voxa bêta · moteur Chatterbox Multilingual (licence MIT)</footer>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
+  };
+
+  // Forme d'onde décorative, comme dans l'app
+  const heights = [10,18,26,14,30,38,22,34,40,28,16,32,24,12,20,36,26,18,30,14,22,34,16,10,24,30,18,12];
+  $("#wave").append(...heights.map((h) => { const i = document.createElement("i"); i.style.height = h + "px"; return i; }));
+
+  // ---------- Missions ----------
+  const MISSIONS = [
+    ["fr", "Générer une voix off en français", "Colle un texte de 2 ou 3 phrases, voix par défaut, puis écoute."],
+    ["en", "Générer une voix off en anglais", "Change la langue de la voix sur English."],
+    ["long", "Tester un texte long", "Au moins 1 000 caractères, par exemple un script de publicité ou de tutoriel."],
+    ["clone", "Cloner ta propre voix", "Onglet Voix : enregistre-toi 15 à 20 s au calme, coche le consentement, crée la voix."],
+    ["useclone", "Générer avec ta voix clonée", "Sélectionne-la dans le Studio et compare avec ta vraie voix."],
+    ["tweak", "Jouer avec les réglages", "Expressivité, rythme, variation : note ce qui change vraiment."],
+    ["export", "Télécharger le fichier audio", "Bouton Télécharger (ou Partager sur Android), puis ouvre le fichier."],
+    ["history", "Retrouver un essai dans l'historique", "Onglet Historique, puis réécoute ou réutilise le texte."],
+  ];
+  let done = store.get("voxa.beta.missions", {});
+  const list = $("#missions");
+  for (const [id, title, hint] of MISSIONS) {
+    const label = document.createElement("label");
+    label.className = "mission";
+    const box = document.createElement("input");
+    box.type = "checkbox"; box.id = "m-" + id; box.checked = !!done[id];
+    box.addEventListener("change", () => { done[id] = box.checked; store.set("voxa.beta.missions", done); paintProgress(); });
+    const txt = document.createElement("div");
+    const b = document.createElement("b"); b.textContent = title;
+    const s = document.createElement("small"); s.textContent = hint;
+    txt.append(b, s);
+    label.append(box, txt);
+    list.append(label);
+  }
+  function paintProgress() {
+    const n = MISSIONS.filter(([id]) => done[id]).length;
+    $("#progress").textContent = n === MISSIONS.length ? "Toutes les missions sont faites. Merci !" : `${n} mission${n > 1 ? "s" : ""} sur ${MISSIONS.length}`;
+  }
+  paintProgress();
+
+  // ---------- Échelles 1 à 5 ----------
+  for (const id of ["f-realism", "f-ease", "f-clone"]) {
+    const box = $("#" + id);
+    for (let v = 1; v <= 5; v++) {
+      const l = document.createElement("label");
+      const r = document.createElement("input");
+      r.type = "radio"; r.name = id; r.value = String(v); r.id = `${id}-${v}`;
+      r.setAttribute("aria-label", `${v} sur 5`);
+      const s = document.createElement("span"); s.textContent = v;
+      l.append(r, s); box.append(l);
+    }
+  }
+  const radio = (name) => { const r = document.querySelector(`input[name="${name}"]:checked`); return r ? Number(r.value) : null; };
+  const setRadio = (name, v) => { const r = document.querySelector(`input[name="${name}"][value="${v}"]`); if (r) r.checked = true; };
+
+  // Brouillon gardé localement
+  const FIELDS = ["f-name", "f-device", "f-good", "f-bugs", "f-ideas", "f-report"];
+  const draft = store.get("voxa.beta.draft", {});
+  FIELDS.forEach((id) => { if (draft[id]) $("#" + id).value = draft[id]; });
+  ["f-realism", "f-ease", "f-clone"].forEach((n) => draft[n] && setRadio(n, draft[n]));
+  $("#feedback").addEventListener("input", () => {
+    const d = {};
+    FIELDS.forEach((id) => (d[id] = $("#" + id).value));
+    ["f-realism", "f-ease", "f-clone"].forEach((n) => (d[n] = radio(n)));
+    store.set("voxa.beta.draft", d);
+  });
+
+  function collect() {
+    return {
+      name: $("#f-name").value.trim().slice(0, 60),
+      device: $("#f-device").value,
+      realism: radio("f-realism"), ease: radio("f-ease"), clone: radio("f-clone"),
+      good: $("#f-good").value.trim(), bugs: $("#f-bugs").value.trim(),
+      ideas: $("#f-ideas").value.trim(), report: $("#f-report").value.trim(),
+      missions: MISSIONS.filter(([id]) => done[id]).map(([id]) => id),
+      updatedAt: new Date().toISOString(), version: "1.0.0-beta.1",
+    };
+  }
+  function asText(f) {
+    const note = (v) => (v ? `${v}/5` : "non noté");
+    return [
+      `Retour bêta Voxa ${f.version}`,
+      `Testeur : ${f.name || "anonyme"} · Appareil : ${f.device || "non précisé"}`,
+      `Naturel des voix : ${note(f.realism)} · Simplicité : ${note(f.ease)} · Clonage : ${note(f.clone)}`,
+      `Missions faites : ${f.missions.length}/${MISSIONS.length}${f.missions.length ? " (" + f.missions.join(", ") + ")" : ""}`,
+      f.good && `\nCe qui m'a plu :\n${f.good}`,
+      f.bugs && `\nBugs ou blocages :\n${f.bugs}`,
+      f.ideas && `\nÀ ajouter ou changer :\n${f.ideas}`,
+      f.report && `\nRapport technique :\n${f.report}`,
+    ].filter(Boolean).join("\n");
+  }
+  function status(kind, msg) {
+    const s = $("#f-status");
+    s.className = "status " + kind; s.textContent = msg; s.hidden = false;
+  }
+  function showCopy(text) {
+    const box = $("#f-copybox");
+    box.value = text; box.hidden = false;
+    box.focus(); box.select();
+  }
+  function isEmpty(f) { return !f.realism && !f.ease && !f.clone && !f.good && !f.bugs && !f.ideas; }
+
+  $("#f-copy").addEventListener("click", async () => {
+    const f = collect();
+    if (isEmpty(f)) return status("warn", "Remplis au moins une note ou un champ avant de copier ton retour.");
+    const text = asText(f);
+    try {
+      await navigator.clipboard.writeText(text);
+      status("ok", "Retour copié. Colle-le dans un message (WhatsApp, e-mail…) à la personne qui t'a invité.");
+    } catch {
+      showCopy(text);
+      status("warn", "La copie automatique est bloquée ici. Le texte est sélectionné ci-dessous : copie-le avec Cmd+C ou Ctrl+C.");
+    }
+  });
+
+  // ---------- Enregistrement partagé (db) ----------
+  let db = null, me = null, canWrite = null;
+  async function connect() {
+    if (!window.claude?.use) return;
+    try {
+      const [d, u] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+      db = d;
+      if (u) {
+        me = await u.id();
+        canWrite = await u.can("data.write");
+        if (await u.isOwner()) startOwnerView();
+      }
+      if (db && me) {
+        const snap = await db.doc("feedback/" + me).get();
+        if (snap.exists) {
+          $("#f-submit").textContent = "Mettre à jour mon retour";
+          status("ok", "Ton retour est déjà enregistré. Tu peux le compléter et l'envoyer à nouveau.");
+        }
+      }
+    } catch { /* l'envoi direct restera indisponible, la copie fonctionne toujours */ }
+  }
+  connect();
+
+  $("#feedback").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = collect();
+    if (isEmpty(f)) return status("warn", "Remplis au moins une note ou un champ avant d'envoyer.");
+    if (!db || !me || canWrite === false) {
+      showCopy(asText(f));
+      return status("warn", "Ce lien ne permet pas d'enregistrer ton retour ici. Copie le texte ci-dessous et envoie-le par message à la personne qui t'a invité.");
+    }
+    const btn = $("#f-submit");
+    btn.disabled = true;
+    try {
+      await db.doc("feedback/" + me).set(f);
+      btn.textContent = "Mettre à jour mon retour";
+      status("ok", "Retour envoyé. Merci ! Tu peux le modifier et l'envoyer à nouveau à tout moment.");
+    } catch (err) {
+      showCopy(asText(f));
+      status("warn", err?.code === "quota_exceeded"
+        ? "La boîte à retours est pleine. Copie ton retour ci-dessous et envoie-le par message."
+        : "L'enregistrement n'a pas fonctionné. Copie ton retour ci-dessous et envoie-le par message.");
+    } finally { btn.disabled = false; }
+  });
+
+  // ---------- Vue propriétaire ----------
+  function startOwnerView() {
+    $("#owner").hidden = false;
+    if (!db) return;
+    db.collection("feedback").orderBy("updatedAt", "desc").onSnapshot(renderFeedback, () => {
+      $("#fb-list").innerHTML = '<p class="empty">Impossible de charger les retours pour le moment. Recharge la page.</p>';
+    });
+  }
+  function avg(arr) { const v = arr.filter((x) => typeof x === "number"); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1).replace(".", ",") : "–"; }
+  function renderFeedback(snap) {
+    const items = snap.docs.map((d) => d.data()).filter(Boolean);
+    const stats = $("#stats");
+    stats.innerHTML = "";
+    const stat = (label, value) => { const s = document.createElement("span"); const b = document.createElement("b"); b.textContent = value; s.append(b, label); stats.append(s); };
+    stat("retours", items.length);
+    stat("naturel des voix /5", avg(items.map((i) => i.realism)));
+    stat("simplicité /5", avg(items.map((i) => i.ease)));
+    stat("clonage /5", avg(items.map((i) => i.clone)));
+    stat("signalent un bug", items.filter((i) => i.bugs).length);
+    const listEl = $("#fb-list");
+    listEl.innerHTML = "";
+    if (!items.length) {
+      listEl.innerHTML = '<p class="empty">Aucun retour pour l\'instant. Invite tes testeurs par e-mail comme Éditeurs depuis le menu Partager pour qu\'ils puissent répondre ici.</p>';
+      return;
+    }
+    for (const f of items) {
+      const card = document.createElement("article"); card.className = "fb";
+      const head = document.createElement("div"); head.className = "fb-head";
+      const who = document.createElement("strong"); who.textContent = f.name || "Anonyme";
+      const dev = document.createElement("span"); dev.textContent = f.device || "Appareil non précisé";
+      const when = document.createElement("span");
+      try { when.textContent = new Intl.DateTimeFormat("fr", { dateStyle: "medium", timeStyle: "short" }).format(new Date(f.updatedAt)); } catch { when.textContent = ""; }
+      head.append(who, dev, when);
+      const chip = (t, cls) => { const c = document.createElement("span"); c.className = "chip" + (cls ? " " + cls : ""); c.textContent = t; head.append(c); };
+      chip(`Naturel ${f.realism ?? "–"}/5`); chip(`Simplicité ${f.ease ?? "–"}/5`); chip(`Clonage ${f.clone ?? "–"}/5`);
+      chip(`${(f.missions || []).length}/${MISSIONS.length} missions`);
+      if (f.bugs) chip("Bug signalé", "bug");
+      const dl = document.createElement("dl");
+      for (const [k, label] of [["good", "A aimé"], ["bugs", "Bugs"], ["ideas", "Idées"], ["report", "Rapport"]]) {
+        if (!f[k]) continue;
+        const dt = document.createElement("dt"); dt.textContent = label;
+        const dd = document.createElement("dd"); dd.textContent = f[k];
+        dl.append(dt, dd);
+      }
+      card.append(head);
+      if (dl.children.length) card.append(dl);
+      listEl.append(card);
+    }
+  }
+})();
+</script>
