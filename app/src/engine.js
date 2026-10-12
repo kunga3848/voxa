@@ -79,7 +79,8 @@ function classifyError(message) {
   const m = String(message || "").toLowerCase();
   if (/quota|exceeded|zerogpu|gpu task/.test(m)) return "quota";
   if (/token|unauthor|login|sign/.test(m)) return "hf_token";
-  return message ? `cloud_error:${message}` : "cloud_error";
+  if (!message) return settings.hfToken ? "quota" : "hf_token_required"; // erreur GPU masquée par le Space
+  return `cloud_error:${message}`;
 }
 
 /** Appel Gradio (protocole /call + flux SSE). Renvoie la liste des sorties. */
