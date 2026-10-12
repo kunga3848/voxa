@@ -1,0 +1,7 @@
+{
+  "appId": "com.voxa.app",
+  "appName": "Voxa",
+  "webDir": "dist",
+  "server": { "androidScheme": "http", "cleartext": true },
+  "android": { "allowMixedContent": true }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "voxa",
+  "productName": "Voxa",
+  "version": "1.0.0",
+  "description": "Voix off réalistes et clonage de voix",
+  "author": "Voxa",
+  "license": "MIT",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "desktop": "npm run build && electron .",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "android": "npm run build && cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/filesystem": "^7.0.0",
+    "@capacitor/share": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.voxa.app",
+    "productName": "Voxa",
+    "directories": { "output": "release", "buildResources": "build" },
+    "files": ["dist/**", "electron/**", "package.json"],
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.png" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "artifactName": "Voxa-Setup-${version}.exe" },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "category": "public.app-category.music",
+      "icon": "build/icon.png",
+      "artifactName": "Voxa-${version}-${arch}.dmg",
+      "extendInfo": { "NSMicrophoneUsageDescription": "Voxa utilise le micro pour enregistrer un échantillon de voix à cloner." }
+    }
+  }
+}

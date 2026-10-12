@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F2F3F6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#11141A" media="(prefers-color-scheme: dark)">
+  <title>Voxa</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="11" width="3" height="6" rx="1.5"/><rect x="9" y="6" width="3" height="16" rx="1.5"/><rect x="15" y="3" width="3" height="22" rx="1.5"/><rect x="21" y="9" width="3" height="10" rx="1.5"/></svg>
+      <span>voxa</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="studio" aria-selected="true">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/></svg><span data-i18n="tabStudio"></span></button>
+      <button role="tab" data-tab="voices">
+        <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span data-i18n="tabVoices"></span></button>
+      <button role="tab" data-tab="history">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span data-i18n="tabHistory"></span></button>
+      <button role="tab" data-tab="settings">
+        <svg viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></svg><span data-i18n="tabSettings"></span></button>
+    </nav>
+    <div class="top-right">
+      <span class="status" id="status"><i></i><span></span></span>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button data-lang="fr">FR</button><button data-lang="en">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <main>
+    <!-- STUDIO -->
+    <section class="view" id="view-studio">
+      <div class="studio">
+        <div class="sheet">
+          <input class="title-input" id="title" data-i18n-ph="titlePlaceholder" maxlength="80">
+          <textarea id="script" data-i18n-ph="scriptPlaceholder" spellcheck="true"></textarea>
+          <div class="sheet-foot"><span id="chars"></span><span id="estimate"></span></div>
+        </div>
+
+        <aside class="controls">
+          <label class="field">
+            <span data-i18n="voice"></span>
+            <select id="voice"></select>
+          </label>
+          <label class="field">
+            <span data-i18n="language"></span>
+            <select id="language"></select>
+          </label>
+
+          <div class="field slider">
+            <div class="row"><label for="exaggeration" data-i18n="expressiveness"></label><output id="o-exaggeration"></output></div>
+            <input type="range" id="exaggeration" min="0.25" max="1.5" step="0.05" value="0.5">
+            <small data-i18n="expressivenessHint"></small>
+          </div>
+          <div class="field slider">
+            <div class="row"><label for="stability" data-i18n="stability"></label><output id="o-stability"></output></div>
+            <input type="range" id="stability" min="0" max="1" step="0.05" value="0.5">
+            <small data-i18n="stabilityHint"></small>
+          </div>
+          <div class="field slider">
+            <div class="row"><label for="temperature" data-i18n="variation"></label><output id="o-temperature"></output></div>
+            <input type="range" id="temperature" min="0.3" max="1.2" step="0.05" value="0.8">
+            <small data-i18n="variationHint"></small>
+          </div>
+          <div class="field slider">
+            <div class="row"><label for="speed" data-i18n="speed"></label><output id="o-speed"></output></div>
+            <input type="range" id="speed" min="0.7" max="1.3" step="0.05" value="1">
+          </div>
+          <div class="field slider">
+            <div class="row"><label for="pause" data-i18n="pause"></label><output id="o-pause"></output></div>
+            <input type="range" id="pause" min="0" max="1.2" step="0.05" value="0.25">
+          </div>
+
+          <div class="field">
+            <span data-i18n="format"></span>
+            <div class="seg" id="format" role="radiogroup">
+              <button role="radio" data-v="wav" aria-checked="true">WAV</button>
+              <button role="radio" data-v="mp3" aria-checked="false">MP3</button>
+            </div>
+          </div>
+
+          <button class="primary" id="generate"><span data-i18n="generate"></span></button>
+        </aside>
+      </div>
+
+      <div class="result" id="result">
+        <p class="empty" data-i18n="resultEmpty"></p>
+      </div>
+    </section>
+
+    <!-- VOIX -->
+    <section class="view" id="view-voices" hidden>
+      <div class="narrow">
+        <form class="clone" id="clone-form">
+          <h2 data-i18n="cloneTitle"></h2>
+          <p class="muted" data-i18n="cloneIntro"></p>
+          <div class="two">
+            <label class="field"><span data-i18n="voiceName"></span><input id="v-name" maxlength="60" required></label>
+            <label class="field"><span data-i18n="voiceDesc"></span><input id="v-desc" maxlength="140"></label>
+          </div>
+          <div class="sample-pick">
+            <label class="ghost file-btn">
+              <svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v4h14v-4"/></svg>
+              <span data-i18n="importFile"></span>
+              <input type="file" id="v-file" accept="audio/*" hidden>
+            </label>
+            <button type="button" class="ghost" id="v-record">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" class="fill"/></svg>
+              <span data-i18n="record"></span>
+            </button>
+          </div>
+          <div class="sample-state" id="v-sample" hidden></div>
+          <label class="consent">
+            <input type="checkbox" id="v-consent">
+            <span data-i18n="consent"></span>
+          </label>
+          <button class="primary" id="v-create" type="submit"><span data-i18n="createVoice"></span></button>
+        </form>
+
+        <div class="voice-lists" id="voice-lists"></div>
+      </div>
+    </section>
+
+    <!-- HISTORIQUE -->
+    <section class="view" id="view-history" hidden>
+      <div class="narrow"><ul class="history" id="history"></ul></div>
+    </section>
+
+    <!-- RÉGLAGES -->
+    <section class="view" id="view-settings" hidden>
+      <form class="narrow settings" id="settings-form">
+        <label class="field">
+          <span data-i18n="server"></span>
+          <input id="s-server" inputmode="url" autocomplete="off" spellcheck="false">
+          <small data-i18n="serverHint"></small>
+        </label>
+        <label class="field">
+          <span data-i18n="apiKey"></span>
+          <input id="s-key" type="password" autocomplete="off">
+          <small data-i18n="apiKeyHint"></small>
+        </label>
+        <div class="field">
+          <span data-i18n="theme"></span>
+          <div class="seg" id="s-theme" role="radiogroup">
+            <button type="button" role="radio" data-v="auto" data-i18n="themeAuto"></button>
+            <button type="button" role="radio" data-v="light" data-i18n="themeLight"></button>
+            <button type="button" role="radio" data-v="dark" data-i18n="themeDark"></button>
+          </div>
+        </div>
+        <button class="primary" type="submit"><span data-i18n="save"></span></button>
+        <p class="muted version">Voxa 1.0 · Chatterbox Multilingual (MIT)</p>
+      </form>
+    </section>
+  </main>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
