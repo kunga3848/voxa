@@ -68,7 +68,14 @@ class Engine:
         self.error: Optional[str] = None
 
     def pick_device(self) -> str:
+        import platform
         import torch
+
+        forced = os.environ.get("VOXA_DEVICE", "").strip()
+        if forced:
+            return forced
+        if platform.system() == "Darwin" and platform.machine() == "x86_64":
+            return "cpu"  # Mac Intel : MPS (puce AMD) trop instable pour ce modèle
 
         if torch.cuda.is_available():
             return "cuda"
