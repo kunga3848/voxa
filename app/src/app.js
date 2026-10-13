@@ -1,4 +1,4 @@
-import { t, setLang, getLang, applyStatic, errorText } from "./i18n.js";
+import { t, tv, setLang, getLang, applyStatic, errorText } from "./i18n.js";
 import { settings, saveSettings, resolveMode, isNative, ApiError } from "./api.js";
 import { engine, LANGUAGES } from "./engine.js";
 import { prepareSample } from "./audio.js";
@@ -8,7 +8,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const DRAFT_KEY = "voxa.draft";
 
-const state = { health: null, voices: [], history: [], format: "wav", sample: null, recorder: null, lastError: "" };
+const state = { health: null, voices: [], history: [], format: "wav", sample: null, recorder: null, lastError: "", voice: "default", takes: 1 };
 
 /* ---------------------------------------------------------------- utilitaires */
 function toast(msg, kind = "") {
@@ -63,12 +63,15 @@ function applyLanguage(l) {
   $$(".lang-switch button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === getLang())));
   updateCounters();
   renderStatus();
-  renderVoiceSelect();
+  renderControls();
+  renderVoiceChip();
   renderVoiceLists();
+  renderCloneSelects();
+  renderKit();
   renderHistory();
   renderCaps();
   renderModeHint();
-  if (state.lastResult) renderResult(state.lastResult);
+  if (state.lastResults?.length) renderResults(state.lastResults);
   else $("#result").innerHTML = `<p class="empty">${t("resultEmpty")}</p>`;
   if (state.sample) renderSample();
 }
@@ -118,6 +121,19 @@ const SLIDERS = {
   exaggeration: (v) => v.toFixed(2), stability: (v) => v.toFixed(2), temperature: (v) => v.toFixed(2),
   speed: (v) => `${v.toFixed(2)}×`, pause: (v) => `${v.toFixed(2)} s`,
 };
+// Tons prêts à l'emploi : réglages éprouvés pour la voix off publicitaire.
+// Au-delà de 0,7 d'expressivité Chatterbox devient théâtral ; un guidage bas accélère le débit.
+const TONES = {
+  spot:      { exaggeration: 0.6,  stability: 0.4,  temperature: 0.8,  pause: 0.15 },
+  natural:   { exaggeration: 0.45, stability: 0.5,  temperature: 0.8,  pause: 0.25 },
+  narration: { exaggeration: 0.4,  stability: 0.6,  temperature: 0.7,  pause: 0.4 },
+  announce:  { exaggeration: 0.5,  stability: 0.55, temperature: 0.65, pause: 0.3 },
+  dramatic:  { exaggeration: 0.7,  stability: 0.35, temperature: 0.75, pause: 0.45 },
+  custom:    null,
+};
+const EFFECT_KEYS = ["auto", "none", "robot", "radio", "telephone", "megaphone"];
+const FINISH_KEYS = ["spot", "broadcast", "raw"];
+
 function paintSlider(input) {
   const v = parseFloat(input.value), min = parseFloat(input.min), max = parseFloat(input.max);
   input.style.setProperty("--p", `${((v - min) / (max - min)) * 100}%`);
@@ -133,7 +149,9 @@ function updateCounters() {
 }
 function saveDraft() {
   const d = { title: $("#title").value, script: $("#script").value, format: state.format,
-    voice: $("#voice").value, language: $("#language").value };
+    voice: state.voice, language: $("#language").value, tone: $("#tone").value,
+    effect: $("#effect").value, finish: $("#finish").value, takes: state.takes,
+    normalize: $("#normalize").checked };
   for (const id of Object.keys(SLIDERS)) d[id] = $(`#${id}`).value;
   state.draft = d;
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* ignore */ }
@@ -145,13 +163,40 @@ function loadDraft() {
   $("#script").value = d.script || "";
   for (const id of Object.keys(SLIDERS)) if (d[id]) $(`#${id}`).value = d[id];
   if (d.format) setFormat(d.format);
+  state.voice = d.voice || "default";
+  state.takes = d.takes || 1;
+  $("#normalize").checked = d.normalize !== false;
   state.draft = d;
 }
 function setFormat(v) {
   state.format = v;
   $$("#format button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === v)));
 }
-/** Désactive ce que le moteur courant ne sait pas faire (MP3, vitesse en mode test). */
+function setTakes(n) {
+  state.takes = n;
+  $$("#takes button").forEach((b) => b.setAttribute("aria-checked", String(+b.dataset.v === n)));
+}
+function fillSelect(sel, keys, labelOf, current) {
+  sel.innerHTML = "";
+  for (const k of keys) sel.append(el("option", { value: k }, labelOf(k)));
+  if (keys.includes(current)) sel.value = current;
+}
+function renderControls() {
+  const d = state.draft || {};
+  fillSelect($("#tone"), Object.keys(TONES), (k) => tv(`tones.${k}`)[0], $("#tone").value || d.tone || "spot");
+  fillSelect($("#effect"), EFFECT_KEYS, (k) => t(`effects.${k}`), $("#effect").value || d.effect || "auto");
+  fillSelect($("#finish"), FINISH_KEYS, (k) => t(`finishes.${k}`), $("#finish").value || d.finish || "spot");
+  $("#tone-hint").textContent = tv(`tones.${$("#tone").value}`)[1];
+  setTakes(state.takes || 1);
+}
+function applyTone(key) {
+  const preset = TONES[key];
+  $("#tone-hint").textContent = tv(`tones.${key}`)[1];
+  if (!preset) return;
+  for (const [id, v] of Object.entries(preset)) { $(`#${id}`).value = v; paintSlider($(`#${id}`)); }
+  updateCounters();
+}
+/** Désactive ce que le moteur courant ne sait pas faire (MP3, vitesse, effets en mode test). */
 function renderCaps() {
   const caps = engine().caps;
   const mp3 = $('#format [data-v="mp3"]');
@@ -159,7 +204,9 @@ function renderCaps() {
   if (!caps.mp3 && state.format === "mp3") setFormat("wav");
   $("#speed").disabled = !caps.speed;
   $("#speed").closest(".field").classList.toggle("disabled", !caps.speed);
-  $("#cloud-note").hidden = caps.speed && caps.mp3;
+  $("#effect-field").hidden = !caps.effects;
+  $("#finish-field").hidden = !caps.finish;
+  $("#cloud-note").hidden = caps.speed && caps.mp3 && caps.effects;
   $("#cloud-note").textContent = t("cloudNote");
   $("#consent-cloud").hidden = engine().kind !== "cloud";
   updateCounters();
@@ -173,24 +220,96 @@ function renderLanguages() {
   for (const [code, name] of Object.entries(langs)) sel.append(el("option", { value: code }, name));
   sel.value = langs[current] ? current : "fr";
 }
-function renderVoiceSelect() {
-  const sel = $("#voice");
-  const current = state.draft?.voice || sel.value || "default";
-  sel.innerHTML = "";
-  const lib = state.voices.filter((v) => v.builtin);
-  const mine = state.voices.filter((v) => !v.builtin);
-  const g1 = el("optgroup", { label: t("library") });
-  g1.append(el("option", { value: "default" }, t("defaultVoice")));
-  lib.filter((v) => v.id !== "default").forEach((v) => g1.append(el("option", { value: v.id }, v.name)));
-  sel.append(g1);
-  if (mine.length) {
-    const g2 = el("optgroup", { label: t("myVoices") });
-    mine.forEach((v) => g2.append(el("option", { value: v.id }, v.name)));
-    sel.append(g2);
+
+/* ---------------------------------------------------------------- choix de la voix */
+const voiceById = (id) => state.voices.find((v) => v.id === id);
+function voiceName(v) { return v.id === "default" ? t("defaultVoice") : v.name; }
+function voiceTags(v) {
+  const parts = [];
+  if (v.gender && v.gender !== "neutre") parts.push(t(`genders.${v.gender}`));
+  if (v.origin && v.origin !== "autre") parts.push(t(`origins.${v.origin}`));
+  if (v.style === "robotique") parts.push(t("styles.robotique"));
+  if (v.language) parts.push(v.language.toUpperCase());
+  return parts.join(" · ");
+}
+function avatarFor(v) {
+  return el("span", { class: `avatar g-${v.gender || "neutre"}${v.style === "robotique" ? " robot" : ""}`, "aria-hidden": "true" },
+    v.style === "robotique" ? "◎" : (v.name || "?").slice(0, 1).toUpperCase());
+}
+function renderVoiceChip() {
+  const v = voiceById(state.voice) || voiceById("default") || { id: "default", name: "Voxa", gender: "femme" };
+  if (!voiceById(state.voice) && state.voices.length) state.voice = "default";
+  $("#vc-avatar").replaceWith(Object.assign(avatarFor(v), { id: "vc-avatar" }));
+  $("#vc-name").textContent = voiceName(v);
+  $("#vc-tags").textContent = voiceTags(v);
+}
+function selectVoice(id, { close = true } = {}) {
+  state.voice = id;
+  const v = voiceById(id);
+  // Langue de l'échantillon proposée par défaut quand elle est connue (meilleur accent)
+  if (v?.language && v.language !== $("#language").value && ["fr", "en"].includes(v.language) && v.origin !== "autre") {
+    $("#language").value = v.language;
   }
-  sel.value = state.voices.some((v) => v.id === current) ? current : "default";
+  renderVoiceChip();
+  saveDraft();
+  if (close) $("#picker").close();
+}
+const filters = { gender: "all", origin: "all", style: "all" };
+function renderFilters() {
+  const groups = {
+    gender: ["all", "femme", "homme"],
+    origin: ["all", "africaine", "francaise", "anglaise-us", "anglaise-uk"],
+    style: engine().caps.effects ? ["all", "naturelle", "robotique"] : ["all", "naturelle"],
+  };
+  for (const [key, values] of Object.entries(groups)) {
+    const box = $(`#f-${key}`);
+    box.innerHTML = "";
+    for (const v of values) {
+      box.append(el("button", { type: "button", class: "chip", "aria-pressed": String(filters[key] === v),
+        onclick: () => { filters[key] = v; renderFilters(); renderVoiceGrid(); } },
+        t(`${key === "gender" ? "genders" : key === "origin" ? "origins" : "styles"}.${v}`)));
+    }
+  }
+}
+let previewing = null;
+function renderVoiceGrid() {
+  const grid = $("#voice-grid");
+  grid.innerHTML = "";
+  const list = state.voices.filter((v) =>
+    (filters.gender === "all" || v.gender === filters.gender) &&
+    (filters.origin === "all" || v.origin === filters.origin) &&
+    (filters.style === "all" || (v.style || "naturelle") === filters.style) &&
+    (engine().caps.effects || v.style !== "robotique"));
+  if (!list.length) {
+    const african = filters.origin === "africaine";
+    grid.append(el("div", { class: "grid-empty" },
+      el("p", {}, african ? t("noAfrican") : t("noVoiceMatch")),
+      african ? el("button", { class: "ghost", type: "button", onclick: () => { $("#picker").close(); showTab("voices"); $("#v-origin").value = "africaine"; } }, t("goToVoices")) : null));
+    return;
+  }
+  for (const v of list) {
+    const chosen = v.id === state.voice;
+    const listenBtn = v.previewSrc ? el("button", { type: "button", class: "icon-btn", title: t("listen"), "aria-label": `${t("listen")} ${voiceName(v)}` }, icon("play")) : null;
+    listenBtn?.addEventListener("click", () => {
+      if (previewing === v.id && !previewAudio.paused) { previewAudio.pause(); return; }
+      stopOthers(previewAudio); previewing = v.id;
+      previewAudio.src = v.previewSrc; previewAudio.play().catch(showError);
+    });
+    grid.append(el("article", { class: `vcard${chosen ? " chosen" : ""}` },
+      el("div", { class: "vcard-head" }, avatarFor(v),
+        el("div", { class: "vcard-title" }, el("b", {}, voiceName(v)), el("small", {}, voiceTags(v))), listenBtn),
+      v.description ? el("p", {}, v.description) : null,
+      el("button", { type: "button", class: chosen ? "ghost" : "primary small", disabled: chosen, onclick: () => selectVoice(v.id) },
+        chosen ? t("chosen") : t("choose"))));
+  }
+}
+function openPicker() {
+  renderFilters();
+  renderVoiceGrid();
+  $("#picker").showModal();
 }
 
+/* ---------------------------------------------------------------- génération */
 let generating = null;
 async function generate() {
   if (generating) return;
@@ -199,21 +318,34 @@ async function generate() {
   const btn = $("#generate");
   btn.disabled = true;
   const setLabel = (s) => { btn.innerHTML = `<span class="spinner"></span><span>${s}</span>`; };
-  setLabel(t("generating"));
+  const n = state.takes || 1;
   const slow = setTimeout(() => toast(t("generatingLong")), 8000);
   generating = new AbortController();
+  const caps = engine().caps;
+  const base = {
+    text, title: $("#title").value.trim(), voice: state.voice, language: $("#language").value,
+    exaggeration: +$("#exaggeration").value, stability: +$("#stability").value,
+    temperature: +$("#temperature").value, speed: caps.speed ? +$("#speed").value : 1,
+    pause: +$("#pause").value, format: state.format, tone: $("#tone").value,
+    normalize_text: $("#normalize").checked,
+  };
+  if (caps.effects && $("#effect").value !== "auto") base.effect = $("#effect").value;
+  if (caps.finish) base.finish = $("#finish").value;
+  const results = [];
   try {
-    const res = await engine().tts({
-      text, title: $("#title").value.trim(), voice: $("#voice").value, language: $("#language").value,
-      exaggeration: +$("#exaggeration").value, stability: +$("#stability").value,
-      temperature: +$("#temperature").value, speed: engine().caps.speed ? +$("#speed").value : 1,
-      pause: +$("#pause").value, format: state.format,
-    }, { signal: generating.signal, onProgress: (i, n) => { if (n > 1) setLabel(t("progress", { i, n })); } });
-    if (res._note === "ffmpeg_missing") toast(t("ffmpegNote"));
-    state.lastResult = res;
-    renderResult(res, true);
-    state.history = [res, ...state.history.filter((h) => h.id !== res.id)];
+    for (let i = 0; i < n; i++) {
+      setLabel(n > 1 ? t("take", { n: `${i + 1}/${n}` }) : t("generating"));
+      const seed = Math.floor(Math.random() * 2 ** 31);
+      const res = await engine().tts({ ...base, seed }, { signal: generating.signal,
+        onProgress: (k, m) => { if (m > 1) setLabel(`${n > 1 ? t("take", { n: `${i + 1}/${n}` }) + " · " : ""}${t("progress", { i: k, n: m })}`); } });
+      if (res._note === "ffmpeg_missing") toast(t("ffmpegNote"));
+      results.push(res);
+      state.history = [res, ...state.history.filter((h) => h.id !== res.id)];
+      renderResults(results, i === 0);
+    }
+    state.lastResults = results;
   } catch (e) {
+    if (results.length) state.lastResults = results;
     showError(e);
   } finally {
     generating = null;
@@ -222,12 +354,14 @@ async function generate() {
     btn.innerHTML = `<span>${t("generate")}</span>`;
   }
 }
-function renderResult(item, autoplay = false) {
+function renderResults(items, autoplay = false) {
   const box = $("#result");
   box.innerHTML = "";
-  const p = player(item);
-  box.append(p.node);
-  if (autoplay) { box.scrollIntoView({ behavior: "smooth", block: "nearest" }); p.play(); }
+  items.forEach((item, i) => {
+    const p = player(item, { label: items.length > 1 || (state.takes || 1) > 1 ? t("take", { n: i + 1 }) : "" });
+    box.append(p.node);
+    if (autoplay && i === 0) { box.scrollIntoView({ behavior: "smooth", block: "nearest" }); p.play(); }
+  });
 }
 
 /* ---------------------------------------------------------------- lecteur + forme d'onde */
@@ -279,7 +413,7 @@ function drawWave(canvas, peaks, progress) {
     c.fill();
   }
 }
-function player(item, { compact = false } = {}) {
+function player(item, { compact = false, label = "" } = {}) {
   const audio = new Audio();
   audio.preload = "metadata";
   audio.src = item.src;
@@ -305,8 +439,9 @@ function player(item, { compact = false } = {}) {
     el("button", { class: "ghost", onclick: () => saveAudio(item) }, icon(isNative() ? "share" : "download"),
       el("span", {}, isNative() ? t("share") : t("download"))));
   const meta = el("div", { class: "player-meta" },
-    el("strong", {}, item.title || "Voxa"),
+    el("strong", {}, label ? `${label} — ${item.title || "Voxa"}` : (item.title || "Voxa")),
     el("span", {}, item.voiceName),
+    item.effect && item.effect !== "none" ? el("span", {}, t(`effects.${item.effect}`)) : null,
     el("span", {}, (item.language || "").toUpperCase()),
     el("span", {}, (item.format || "").toUpperCase()),
     item.renderSeconds != null && !compact ? el("span", {}, t("renderedIn", { s: item.renderSeconds })) : null,
@@ -338,21 +473,22 @@ async function saveAudio(item) {
 /* ---------------------------------------------------------------- voix */
 async function loadVoices() {
   try { state.voices = await engine().voices(); } catch (e) { if (e.code !== "network") showError(e); return; }
-  renderVoiceSelect();
+  renderVoiceChip();
   renderVoiceLists();
+  if ($("#picker").open) renderVoiceGrid();
 }
 const previewAudio = new Audio();
 function renderVoiceLists() {
   const box = $("#voice-lists");
   box.innerHTML = "";
   const row = (v) => el("div", { class: "voice-row" },
-    el("span", { class: "avatar", "aria-hidden": "true" }, (v.name || "?").slice(0, 1).toUpperCase()),
-    el("div", { class: "voice-info" }, el("b", {}, v.id === "default" ? t("defaultVoice") : v.name),
-      el("span", {}, [v.description && v.description !== "default" ? v.description : "", v.created ? fmtDate(v.created) : ""].filter(Boolean).join(" — "))),
+    avatarFor(v),
+    el("div", { class: "voice-info" }, el("b", {}, voiceName(v)),
+      el("span", {}, [voiceTags(v), v.description, v.created && !v.builtin ? fmtDate(v.created) : ""].filter(Boolean).join(" — "))),
     v.previewSrc ? el("button", { class: "icon-btn", "aria-label": t("preview"), title: t("preview"), onclick: () => {
       stopOthers(previewAudio); previewAudio.src = v.previewSrc; previewAudio.play().catch(showError);
     } }, icon("play")) : null,
-    el("button", { class: "ghost", onclick: () => { $("#voice").value = v.id; saveDraft(); showTab("studio"); } }, t("use")),
+    el("button", { class: "ghost", onclick: () => { selectVoice(v.id, { close: false }); showTab("studio"); } }, t("use")),
     !v.builtin ? el("button", { class: "icon-btn danger", "aria-label": t("delete"), title: t("delete"), onclick: async () => {
       if (!confirm(t("deleteVoiceConfirm", { name: v.name }))) return;
       try { await engine().deleteVoice(v.id); await loadVoices(); } catch (e) { showError(e); }
@@ -362,8 +498,19 @@ function renderVoiceLists() {
   box.append(el("h3", {}, t("myVoices")));
   box.append(mine.length ? el("div", {}, mine.map(row)) : el("p", { class: "list-empty" }, t("noVoices")));
   box.append(el("h3", {}, t("library")));
-  const lib = state.voices.filter((v) => v.builtin);
+  const lib = state.voices.filter((v) => v.builtin && (engine().caps.effects || v.style !== "robotique"));
   box.append(el("div", {}, (lib.length ? lib : [{ id: "default", name: "Voxa", builtin: true }]).map(row)));
+}
+function renderCloneSelects() {
+  const keep = (id) => $(id).value;
+  const g = keep("#v-gender"), o = keep("#v-origin"), l = keep("#v-lang");
+  fillSelect($("#v-gender"), ["femme", "homme", "neutre"], (k) => t(`genders.${k}`), g || "femme");
+  fillSelect($("#v-origin"), ["africaine", "francaise", "anglaise-us", "anglaise-uk", "autre"], (k) => t(`origins.${k}`), o || "africaine");
+  fillSelect($("#v-lang"), ["fr", "en"], (k) => LANGUAGES[k], l || (getLang() === "fr" ? "fr" : "en"));
+}
+function renderKit() {
+  $("#kitFr").textContent = t("kitFr");
+  $("#kitEn").textContent = t("kitEn");
 }
 
 function renderSample() {
@@ -425,9 +572,11 @@ async function createVoice(e) {
       if (err instanceof ApiError) throw err;
       if (engine().kind === "cloud") throw new ApiError("bad_audio", 400); // le moteur local saura peut-être le lire
     }
-    const v = await engine().createVoice({ name, description: $("#v-desc").value.trim(), blob, filename });
+    const v = await engine().createVoice({ name, description: $("#v-desc").value.trim(), blob, filename,
+      gender: $("#v-gender").value, origin: $("#v-origin").value, language: $("#v-lang").value });
     toast(t("voiceCreated", { name: v.name }));
     $("#clone-form").reset();
+    renderCloneSelects();
     setSample(null);
     await loadVoices();
   } catch (err) { showError(err); }
@@ -452,7 +601,7 @@ function renderHistory() {
       el("div", { class: "actions" },
         el("button", { class: "icon-btn", title: t("reuse"), "aria-label": t("reuse"), onclick: () => {
           $("#script").value = item.text; $("#title").value = item.title || "";
-          if (state.voices.some((v) => v.id === item.voice)) $("#voice").value = item.voice;
+          if (voiceById(item.voice)) selectVoice(item.voice, { close: false });
           $("#language").value = item.language; updateCounters(); saveDraft(); showTab("studio");
         } }, icon("reuse")),
         el("button", { class: "icon-btn", title: isNative() ? t("share") : t("download"), "aria-label": t("download"), onclick: () => saveAudio(item) }, icon(isNative() ? "share" : "download")),
@@ -503,14 +652,30 @@ async function init() {
   $$(".controls input[type=range]").forEach((i) => { paintSlider(i); i.addEventListener("input", () => { paintSlider(i); updateCounters(); saveDraft(); }); });
   await resolveMode();
   applyLanguage(settings.uiLang || (nav === "fr" ? "fr" : "en"));
+  if (!state.draft?.tone) applyTone("spot");
   fillSettings();
 
   $$(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
   $$(".lang-switch button").forEach((b) => b.addEventListener("click", () => { saveSettings({ uiLang: b.dataset.lang }); applyLanguage(b.dataset.lang); }));
   $("#script").addEventListener("input", () => { updateCounters(); saveDraft(); });
   $("#title").addEventListener("input", saveDraft);
-  $("#voice").addEventListener("change", saveDraft);
   $("#language").addEventListener("change", saveDraft);
+  $("#voice-chip").addEventListener("click", openPicker);
+  $("#picker-close").addEventListener("click", () => $("#picker").close());
+  $("#picker").addEventListener("click", (e) => { if (e.target === $("#picker")) $("#picker").close(); });
+  $("#picker").addEventListener("close", () => previewAudio.pause());
+  $("#tone").addEventListener("change", () => { applyTone($("#tone").value); saveDraft(); });
+  $("#effect").addEventListener("change", saveDraft);
+  $("#finish").addEventListener("change", saveDraft);
+  $("#normalize").addEventListener("change", saveDraft);
+  $$("#takes button").forEach((b) => b.addEventListener("click", () => { setTakes(+b.dataset.v); saveDraft(); }));
+  $$(".controls input[type=range]").forEach((i) => i.addEventListener("input", () => {
+    if ($("#tone").value !== "custom") { $("#tone").value = "custom"; $("#tone-hint").textContent = tv("tones.custom")[1]; }
+  }));
+  $$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    const text = $("#" + b.dataset.copy).textContent;
+    try { await navigator.clipboard.writeText(text); toast(t("copied")); } catch { prompt(t("copy"), text); }
+  }));
   $$("#format button").forEach((b) => b.addEventListener("click", () => { if (!b.disabled) { setFormat(b.dataset.v); saveDraft(); } }));
   $("#generate").addEventListener("click", generate);
   $("#script").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate(); });

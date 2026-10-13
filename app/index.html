@@ -50,46 +50,79 @@
         </div>
 
         <aside class="controls">
-          <label class="field">
+          <div class="field">
             <span data-i18n="voice"></span>
-            <select id="voice"></select>
-          </label>
+            <button type="button" class="voice-chip" id="voice-chip" aria-haspopup="dialog">
+              <span class="avatar" id="vc-avatar" aria-hidden="true">V</span>
+              <span class="vc-text"><b id="vc-name">Voxa</b><small id="vc-tags"></small></span>
+              <span class="vc-change" data-i18n="change"></span>
+            </button>
+          </div>
           <label class="field">
             <span data-i18n="language"></span>
             <select id="language"></select>
           </label>
-
-          <div class="field slider">
-            <div class="row"><label for="exaggeration" data-i18n="expressiveness"></label><output id="o-exaggeration"></output></div>
-            <input type="range" id="exaggeration" min="0.25" max="1.5" step="0.05" value="0.5">
-            <small data-i18n="expressivenessHint"></small>
+          <label class="field">
+            <span data-i18n="tone"></span>
+            <select id="tone"></select>
+            <small id="tone-hint"></small>
+          </label>
+          <div class="two-col">
+            <label class="field" id="effect-field">
+              <span data-i18n="effect"></span>
+              <select id="effect"></select>
+            </label>
+            <label class="field" id="finish-field">
+              <span data-i18n="finish"></span>
+              <select id="finish"></select>
+            </label>
           </div>
-          <div class="field slider">
-            <div class="row"><label for="stability" data-i18n="stability"></label><output id="o-stability"></output></div>
-            <input type="range" id="stability" min="0" max="1" step="0.05" value="0.5">
-            <small data-i18n="stabilityHint"></small>
-          </div>
-          <div class="field slider">
-            <div class="row"><label for="temperature" data-i18n="variation"></label><output id="o-temperature"></output></div>
-            <input type="range" id="temperature" min="0.3" max="1.2" step="0.05" value="0.8">
-            <small data-i18n="variationHint"></small>
-          </div>
-          <div class="field slider">
-            <div class="row"><label for="speed" data-i18n="speed"></label><output id="o-speed"></output></div>
-            <input type="range" id="speed" min="0.7" max="1.3" step="0.05" value="1">
-          </div>
-          <div class="field slider">
-            <div class="row"><label for="pause" data-i18n="pause"></label><output id="o-pause"></output></div>
-            <input type="range" id="pause" min="0" max="1.2" step="0.05" value="0.25">
-          </div>
-
           <div class="field">
-            <span data-i18n="format"></span>
-            <div class="seg" id="format" role="radiogroup">
-              <button role="radio" data-v="wav" aria-checked="true">WAV</button>
-              <button role="radio" data-v="mp3" aria-checked="false">MP3</button>
+            <span data-i18n="takes"></span>
+            <div class="seg" id="takes" role="radiogroup">
+              <button role="radio" data-v="1" aria-checked="true">1</button>
+              <button role="radio" data-v="2" aria-checked="false">2</button>
+              <button role="radio" data-v="3" aria-checked="false">3</button>
             </div>
+            <small data-i18n="takesHint"></small>
           </div>
+
+          <details class="advanced" id="advanced">
+            <summary data-i18n="advanced"></summary>
+            <div class="advanced-body">
+              <div class="field slider">
+                <div class="row"><label for="exaggeration" data-i18n="expressiveness"></label><output id="o-exaggeration"></output></div>
+                <input type="range" id="exaggeration" min="0.25" max="1.2" step="0.05" value="0.5">
+                <small data-i18n="expressivenessHint"></small>
+              </div>
+              <div class="field slider">
+                <div class="row"><label for="stability" data-i18n="stability"></label><output id="o-stability"></output></div>
+                <input type="range" id="stability" min="0" max="1" step="0.05" value="0.5">
+                <small data-i18n="stabilityHint"></small>
+              </div>
+              <div class="field slider">
+                <div class="row"><label for="temperature" data-i18n="variation"></label><output id="o-temperature"></output></div>
+                <input type="range" id="temperature" min="0.3" max="1.2" step="0.05" value="0.8">
+                <small data-i18n="variationHint"></small>
+              </div>
+              <div class="field slider">
+                <div class="row"><label for="speed" data-i18n="speed"></label><output id="o-speed"></output></div>
+                <input type="range" id="speed" min="0.7" max="1.3" step="0.05" value="1">
+              </div>
+              <div class="field slider">
+                <div class="row"><label for="pause" data-i18n="pause"></label><output id="o-pause"></output></div>
+                <input type="range" id="pause" min="0" max="1.2" step="0.05" value="0.25">
+              </div>
+              <label class="check"><input type="checkbox" id="normalize" checked><span data-i18n="normalizeText"></span></label>
+              <div class="field">
+                <span data-i18n="format"></span>
+                <div class="seg" id="format" role="radiogroup">
+                  <button role="radio" data-v="wav" aria-checked="true">WAV</button>
+                  <button role="radio" data-v="mp3" aria-checked="false">MP3</button>
+                </div>
+              </div>
+            </div>
+          </details>
 
           <button class="primary" id="generate"><span data-i18n="generate"></span></button>
           <small class="muted note" id="cloud-note" hidden></small>
@@ -111,6 +144,11 @@
             <label class="field"><span data-i18n="voiceName"></span><input id="v-name" maxlength="60" required></label>
             <label class="field"><span data-i18n="voiceDesc"></span><input id="v-desc" maxlength="140"></label>
           </div>
+          <div class="three">
+            <label class="field"><span data-i18n="gender"></span><select id="v-gender"></select></label>
+            <label class="field"><span data-i18n="origin"></span><select id="v-origin"></select></label>
+            <label class="field"><span data-i18n="sampleLanguage"></span><select id="v-lang"></select></label>
+          </div>
           <div class="sample-pick">
             <label class="ghost file-btn">
               <svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v4h14v-4"/></svg>
@@ -131,6 +169,21 @@
         </form>
 
         <div class="voice-lists" id="voice-lists"></div>
+
+        <section class="kit" id="kit">
+          <h2 data-i18n="kitTitle"></h2>
+          <p class="muted" data-i18n="kitIntro"></p>
+          <ol class="kit-steps">
+            <li data-i18n="kitStep1"></li>
+            <li data-i18n="kitStep2"></li>
+            <li data-i18n="kitStep3"></li>
+            <li data-i18n="kitStep4"></li>
+          </ol>
+          <div class="kit-scripts">
+            <div class="kit-script"><div class="row"><b>Français</b><button type="button" class="ghost small" data-copy="kitFr" data-i18n="copy"></button></div><p id="kitFr"></p></div>
+            <div class="kit-script"><div class="row"><b>English</b><button type="button" class="ghost small" data-copy="kitEn" data-i18n="copy"></button></div><p id="kitEn"></p></div>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -186,6 +239,20 @@
       </form>
     </section>
   </main>
+
+  <dialog class="picker" id="picker" aria-labelledby="picker-title">
+    <div class="picker-head">
+      <h2 id="picker-title" data-i18n="pickVoice"></h2>
+      <button type="button" class="icon-btn" id="picker-close" data-i18n-aria="close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="filters">
+      <div class="chips" id="f-gender" role="group"></div>
+      <div class="chips" id="f-origin" role="group"></div>
+      <div class="chips" id="f-style" role="group"></div>
+    </div>
+    <div class="voice-grid" id="voice-grid"></div>
+  </dialog>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <script type="module" src="src/app.js"></script>

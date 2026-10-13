@@ -23,6 +23,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import audiofx
+import textnorm
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -52,7 +55,15 @@ LANGUAGES = {
     "sw": "Kiswahili",
 }
 
-FFMPEG = shutil.which("ffmpeg")
+_local_ffmpeg = ROOT / "bin" / "ffmpeg"
+FFMPEG = str(_local_ffmpeg) if _local_ffmpeg.exists() else shutil.which("ffmpeg")
+
+# Catalogue : valeurs reconnues pour filtrer les voix
+GENDERS = ("femme", "homme", "neutre")
+ORIGINS = ("africaine", "francaise", "anglaise-us", "anglaise-uk", "autre")
+STYLES = ("naturelle", "robotique")
+EFFECTS = ("none", "robot", "radio", "telephone", "megaphone")
+FINISHES = ("spot", "broadcast", "podcast", "raw")
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +125,11 @@ class Engine:
 
             self.model = ChatterboxMultilingualTTS.from_pretrained(device=self.device)
             self.sr = self.model.sr
+            import copy
+
+            # Voix intégrée gardée à part : préparer un échantillon écrase model.conds.
+            self.default_conds = copy.deepcopy(self.model.conds)
+            self.cond_key = ("default", None)
             self.status = "ready"
         except Exception as exc:  # noqa: BLE001
             import traceback
@@ -123,7 +139,7 @@ class Engine:
             print(f"[voxa] Échec du chargement du modèle : {exc}")
 
     def synthesize(self, text: str, lang: str, prompt: Optional[str],
-                   exaggeration: float, cfg: float, temperature: float):
+                   exaggeration: float, cfg: float, temperature: float, seed: Optional[int] = None):
         """Retourne un tableau numpy float32 mono."""
         import numpy as np
 
@@ -135,9 +151,26 @@ class Engine:
 
         kwargs = dict(language_id=lang, exaggeration=exaggeration,
                       cfg_weight=cfg, temperature=temperature)
-        if prompt:
-            kwargs["audio_prompt_path"] = prompt
         with self.lock:
+            # Les conditionnements (empreinte de la voix) ne sont recalculés que si la voix change :
+            # sur processeur, c'est plusieurs secondes gagnées par phrase.
+            key = (prompt or "default", round(exaggeration, 3))
+            if key != self.cond_key:
+                if prompt:
+                    self.model.prepare_conditionals(prompt, exaggeration=exaggeration)
+                else:
+                    import copy
+
+                    self.model.conds = copy.deepcopy(self.default_conds)
+                self.cond_key = key
+            if seed is not None:
+                import random
+
+                import torch
+
+                torch.manual_seed(seed)
+                random.seed(seed)
+                np.random.seed(seed % (2**32))
             wav = self.model.generate(text, **kwargs)
         return wav.squeeze(0).detach().cpu().numpy().astype("float32")
 
@@ -197,25 +230,55 @@ def ffmpeg_post(src: Path, dst: Path, speed: float, fmt: str) -> bool:
     return subprocess.run(cmd).returncode == 0
 
 
+VOICE_DEFAULTS = {"gender": "neutre", "origin": "autre", "language": "", "style": "naturelle",
+                  "effect": None, "tags": [], "settings": None, "source": "", "license": ""}
+
+DEFAULT_VOICE = {
+    "id": "default", "name": "Voxa", "builtin": True, "previewUrl": None,
+    "description": "Voix intégrée au modèle, féminine, neutre.",
+    "gender": "femme", "origin": "autre", "language": "en", "style": "naturelle", "effect": None,
+    "tags": ["intégrée"], "settings": None, "source": "chatterbox", "license": "MIT",
+}
+
+
 def voice_meta(folder: Path, builtin: bool) -> Optional[dict]:
     meta_f = folder / "meta.json"
     if not meta_f.exists():
         return None
-    meta = json.loads(meta_f.read_text("utf-8"))
+    meta = {**VOICE_DEFAULTS, **json.loads(meta_f.read_text("utf-8"))}
     meta["id"] = folder.name if not builtin else f"lib-{folder.name}"
     meta["builtin"] = builtin
     meta["previewUrl"] = f"/api/voices/{meta['id']}/sample"
+    if (folder / "preview.wav").exists():
+        meta["previewUrl"] += "?kind=preview"
     return meta
 
 
-def find_voice(voice_id: str) -> Optional[Path]:
-    if voice_id.startswith("lib-"):
-        folder = LIBRARY_DIR / voice_id[4:]
-    else:
-        folder = VOICES_DIR / voice_id
+def _voice_folder(voice_id: str) -> Optional[Path]:
+    folder = LIBRARY_DIR / voice_id[4:] if voice_id.startswith("lib-") else VOICES_DIR / voice_id
     if not re.fullmatch(r"[A-Za-z0-9_\-]+", folder.name):
         return None
-    return folder if (folder / "sample.wav").exists() else None
+    return folder if (folder / "meta.json").exists() else None
+
+
+def find_voice(voice_id: str) -> Optional[Path]:
+    """Dossier de la voix (les variantes, comme « robot », pointent vers une voix de base)."""
+    folder = _voice_folder(voice_id)
+    return folder
+
+
+def voice_sample_path(voice_id: str, depth: int = 0) -> Optional[Path]:
+    folder = _voice_folder(voice_id)
+    if not folder:
+        return None
+    if (folder / "sample.wav").exists():
+        return folder / "sample.wav"
+    base = json.loads((folder / "meta.json").read_text("utf-8")).get("base")
+    if base == "default":
+        return None
+    if base and depth < 3:
+        return voice_sample_path(base, depth + 1)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -240,13 +303,13 @@ def _startup() -> None:
 def health():
     return {"status": engine.status, "device": engine.device, "error": engine.error,
             "auth": bool(API_KEY), "ffmpeg": bool(FFMPEG), "maxChars": MAX_CHARS,
-            "languages": LANGUAGES}
+            "languages": LANGUAGES, "version": "1.1.0",
+            "features": ["catalog", "effects", "finish", "seed", "textnorm"]}
 
 
 @app.get("/api/voices", dependencies=[Depends(auth)])
 def list_voices():
-    voices = [{"id": "default", "name": "Voxa", "builtin": True, "previewUrl": None,
-               "description": "default"}]
+    voices = [dict(DEFAULT_VOICE)]
     for root, builtin in ((LIBRARY_DIR, True), (VOICES_DIR, False)):
         for f in sorted(root.iterdir()):
             if f.is_dir() and (m := voice_meta(f, builtin)):
@@ -256,7 +319,9 @@ def list_voices():
 
 @app.post("/api/voices", dependencies=[Depends(auth)])
 async def clone_voice(name: str = Form(...), consent: bool = Form(...),
-                      description: str = Form(""), sample: UploadFile = File(...)):
+                      description: str = Form(""), sample: UploadFile = File(...),
+                      gender: str = Form("neutre"), origin: str = Form("autre"),
+                      language: str = Form(""), tags: str = Form("")):
     if not consent:
         raise HTTPException(400, "consent_required")
     name = name.strip()[:60]
@@ -293,17 +358,61 @@ async def clone_voice(name: str = Form(...), consent: bool = Form(...),
         shutil.rmtree(folder, ignore_errors=True)
         raise HTTPException(400, "sample_too_short")
     meta = {"name": name, "description": description.strip()[:140],
-            "created": time.time(), "seconds": round(dur, 1), "consent": True}
+            "created": time.time(), "seconds": round(dur, 1), "consent": True,
+            "gender": gender if gender in GENDERS else "neutre",
+            "origin": origin if origin in ORIGINS else "autre",
+            "language": language if language in LANGUAGES else "",
+            "style": "naturelle", "source": "clone",
+            "tags": [t.strip()[:24] for t in tags.split(",") if t.strip()][:6]}
     (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), "utf-8")
     return voice_meta(folder, False)
 
 
 @app.get("/api/voices/{voice_id}/sample", dependencies=[Depends(auth)])
-def voice_sample(voice_id: str):
+def voice_sample(voice_id: str, kind: str = "sample"):
     folder = find_voice(voice_id)
     if not folder:
         raise HTTPException(404, "voice_not_found")
-    return FileResponse(folder / "sample.wav", media_type="audio/wav")
+    if kind == "preview" and (folder / "preview.wav").exists():
+        return FileResponse(folder / "preview.wav", media_type="audio/wav")
+    path = voice_sample_path(voice_id)
+    if not path:
+        raise HTTPException(404, "voice_not_found")
+    return FileResponse(path, media_type="audio/wav")
+
+
+class VoicePatch(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    gender: Optional[str] = None
+    origin: Optional[str] = None
+    language: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
+@app.patch("/api/voices/{voice_id}", dependencies=[Depends(auth)])
+def edit_voice(voice_id: str, patch: VoicePatch):
+    if voice_id.startswith("lib-") or voice_id == "default":
+        raise HTTPException(400, "builtin_voice")
+    folder = find_voice(voice_id)
+    if not folder:
+        raise HTTPException(404, "voice_not_found")
+    meta = json.loads((folder / "meta.json").read_text("utf-8"))
+    p = patch.model_dump(exclude_none=True)
+    if "name" in p and p["name"].strip():
+        meta["name"] = p["name"].strip()[:60]
+    if "description" in p:
+        meta["description"] = p["description"].strip()[:140]
+    if p.get("gender") in GENDERS:
+        meta["gender"] = p["gender"]
+    if p.get("origin") in ORIGINS:
+        meta["origin"] = p["origin"]
+    if p.get("language") in LANGUAGES or p.get("language") == "":
+        meta["language"] = p["language"]
+    if "tags" in p:
+        meta["tags"] = [t.strip()[:24] for t in p["tags"] if t.strip()][:6]
+    (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), "utf-8")
+    return voice_meta(folder, False)
 
 
 @app.delete("/api/voices/{voice_id}", dependencies=[Depends(auth)])
@@ -328,6 +437,11 @@ class TTSRequest(BaseModel):
     pause: float = Field(0.25, ge=0.0, le=1.5)
     format: str = Field("wav", pattern="^(wav|mp3)$")
     title: str = ""
+    effect: Optional[str] = None          # None = effet prévu par la voix
+    finish: str = "spot"                  # spot | broadcast | podcast | raw
+    seed: Optional[int] = Field(None, ge=0, le=2**31 - 1)
+    normalize_text: bool = True
+    tone: str = ""                        # nom du ton choisi, gardé dans l'historique
 
 
 @app.post("/api/tts", dependencies=[Depends(auth)])
@@ -343,25 +457,39 @@ def tts(req: TTSRequest):
         raise HTTPException(400, "bad_language")
     prompt = None
     voice_name = "Voxa"
+    voice_meta_data = dict(DEFAULT_VOICE)
     if req.voice != "default":
         folder = find_voice(req.voice)
         if not folder:
             raise HTTPException(404, "voice_not_found")
-        prompt = str(folder / "sample.wav")
-        meta = json.loads((folder / "meta.json").read_text("utf-8"))
-        voice_name = meta.get("name", voice_name)
+        voice_meta_data = voice_meta(folder, req.voice.startswith("lib-")) or {}
+        sample = voice_sample_path(req.voice)
+        prompt = str(sample) if sample else None
+        voice_name = voice_meta_data.get("name", voice_name)
+
+    effect = req.effect if req.effect is not None else (voice_meta_data.get("effect") or "none")
+    if effect not in EFFECTS:
+        raise HTTPException(400, "bad_effect")
+    finish = req.finish if req.finish in FINISHES else "spot"
+    # Échantillon dans une autre langue que le texte : on coupe le guidage
+    # pour éviter que l'accent de l'échantillon déteigne (recommandation Chatterbox).
+    cfg = req.stability
+    sample_lang = voice_meta_data.get("language") or ""
+    if sample_lang and sample_lang != req.language:
+        cfg = min(cfg, 0.05)
+    seed = req.seed if req.seed is not None else int.from_bytes(os.urandom(4), "little") % (2**31)
+    spoken = textnorm.normalize(text, req.language) if req.normalize_text else text
 
     started = time.time()
     gap = np.zeros(int(engine.sr * req.pause), dtype="float32")
     pieces = []
-    for i, chunk in enumerate(chunk_text(text)):
+    for i, chunk in enumerate(chunk_text(spoken)):
         if i:
             pieces.append(gap)
-        pieces.append(engine.synthesize(chunk, req.language, prompt,
-                                        req.exaggeration, req.stability, req.temperature))
+        pieces.append(engine.synthesize(chunk, req.language, prompt, req.exaggeration,
+                                        cfg, req.temperature, seed + i))
     audio = np.concatenate(pieces)
-    peak = float(np.abs(audio).max() or 1.0)
-    audio = audio * (0.95 / peak) if peak > 0.95 else audio  # évite la saturation
+    audio = audiofx.process(audio, engine.sr, effect if effect != "none" else None, finish)
 
     gid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
     raw = OUTPUTS_DIR / f"{gid}.raw.wav"
@@ -385,7 +513,9 @@ def tts(req: TTSRequest):
             "text": text, "voice": req.voice, "voiceName": voice_name,
             "language": req.language, "format": final.suffix[1:],
             "duration": duration, "created": time.time(),
-            "renderSeconds": round(time.time() - started, 1)}
+            "renderSeconds": round(time.time() - started, 1),
+            "seed": seed, "effect": effect, "finish": finish, "tone": req.tone[:40],
+            "spokenText": spoken if spoken != text else None}
     (OUTPUTS_DIR / f"{gid}.json").write_text(json.dumps(meta, ensure_ascii=False), "utf-8")
     meta["audioUrl"] = f"/api/audio/{gid}"
     return JSONResponse(meta, headers={"X-Voxa-Note": note} if note else None)

@@ -15,22 +15,31 @@ export const LANGUAGES = {
 const SR = 24000;
 
 /* ------------------------------------------------------------------ moteur local */
+const DEFAULT_VOICE = {
+  id: "default", name: "Voxa", builtin: true, previewSrc: "", gender: "femme", origin: "autre",
+  language: "en", style: "naturelle", effect: null, tags: [],
+};
+
 const local = {
   kind: "local",
-  caps: { mp3: true, speed: true },
+  caps: { mp3: true, speed: true, effects: true, finish: true },
   async health() { return api("/api/health"); },
   async voices() {
     const list = await api("/api/voices");
     return list.map((v) => ({ ...v, previewSrc: v.previewUrl ? url(v.previewUrl) : "" }));
   },
-  async createVoice({ name, description, blob, filename }) {
+  async createVoice({ name, description, blob, filename, gender, origin, language }) {
     const form = new FormData();
     form.append("name", name);
     form.append("description", description);
     form.append("consent", "true");
+    form.append("gender", gender || "neutre");
+    form.append("origin", origin || "autre");
+    form.append("language", language || "");
     form.append("sample", blob, filename);
     return api("/api/voices", { method: "POST", form });
   },
+  editVoice: (id, patch) => api(`/api/voices/${id}`, { method: "PATCH", json: patch }),
   deleteVoice: (id) => api(`/api/voices/${id}`, { method: "DELETE" }),
   async tts(p) {
     const r = await api("/api/tts", { method: "POST", json: p });
@@ -115,9 +124,22 @@ async function fileToSamples(file) {
   return decodeToMono(await res.arrayBuffer(), SR);
 }
 
+// Voix de départ embarquées dans l'app pour le moteur de test (échantillons de référence)
+let starterCache = null;
+async function starterVoices() {
+  if (starterCache) return starterCache;
+  try {
+    const r = await fetch("assets/voices/voices.json");
+    const list = r.ok ? await r.json() : [];
+    starterCache = list.filter((v) => v.style !== "robotique")
+      .map((v) => ({ ...v, builtin: true, previewSrc: `assets/voices/${v.file}` }));
+  } catch { starterCache = []; }
+  return starterCache;
+}
+
 const cloud = {
   kind: "cloud",
-  caps: { mp3: false, speed: false },
+  caps: { mp3: false, speed: false, effects: false, finish: false },
   async health() {
     try {
       const ctl = new AbortController();
@@ -131,13 +153,22 @@ const cloud = {
   async voices() {
     const mine = (await store.all("voices")).sort((a, b) => b.created - a.created);
     return [
-      { id: "default", name: "Voxa", builtin: true, description: "default", previewSrc: "" },
+      { ...DEFAULT_VOICE },
+      ...(await starterVoices()),
       ...mine.map((v) => ({ id: v.id, name: v.name, description: v.description, created: v.created / 1000,
+        gender: v.gender || "neutre", origin: v.origin || "autre", language: v.language || "",
+        style: "naturelle", effect: null, tags: [], source: "clone",
         builtin: false, previewSrc: srcFor(`v-${v.id}`, v.blob) })),
     ];
   },
-  async createVoice({ name, description, blob }) {
-    const v = { id: uid(), name, description, created: Date.now(), blob };
+  async editVoice(id, patch) {
+    const v = await store.get("voices", id);
+    if (!v) throw new ApiError("voice_not_found", 404);
+    await store.put("voices", { ...v, ...patch });
+    return { id, ...patch };
+  },
+  async createVoice({ name, description, blob, gender, origin, language }) {
+    const v = { id: uid(), name, description, created: Date.now(), blob, gender, origin, language };
     await store.put("voices", v);
     return { id: v.id, name };
   },
@@ -146,18 +177,27 @@ const cloud = {
     const started = performance.now();
     const chunks = chunkText(p.text, 280);
     let ref = null, voiceName = "Voxa";
-    if (p.voice !== "default") {
+    let cfg = p.stability;
+    if (p.voice.startsWith("lib-")) {
+      const v = (await starterVoices()).find((x) => x.id === p.voice);
+      if (!v) throw new ApiError("voice_not_found", 404);
+      voiceName = v.name;
+      ref = await upload(await (await fetch(v.previewSrc)).blob());
+      if (v.language && v.language !== p.language) cfg = 0.2;
+    } else if (p.voice !== "default") {
       const v = await store.get("voices", p.voice);
       if (!v) throw new ApiError("voice_not_found", 404);
       voiceName = v.name;
       ref = await upload(v.blob);
+      if (v.language && v.language !== p.language) cfg = 0.2;
     }
-    const seed = Math.floor(Math.random() * 1e6); // même graine pour tous les blocs = voix homogène
+    // même graine pour tous les blocs = voix homogène
+    const seed = p.seed ?? Math.floor(Math.random() * 1e6);
     const parts = [];
     for (let i = 0; i < chunks.length; i++) {
       onProgress?.(i + 1, chunks.length);
       const out = await callSpace("generate_tts_audio",
-        [chunks[i], p.language, ref, p.exaggeration, p.temperature, seed, Math.max(0.2, p.stability)], signal);
+        [chunks[i], p.language, ref, p.exaggeration, p.temperature, seed, Math.max(0.2, cfg)], signal);
       parts.push(await fileToSamples(out[0]));
     }
     const samples = normalize(concat(parts, SR, p.pause));
@@ -166,6 +206,7 @@ const cloud = {
       id: uid(), title: (p.title || p.text.slice(0, 60)).trim(), text: p.text, voice: p.voice, voiceName,
       language: p.language, format: "wav", duration: +(samples.length / SR).toFixed(2),
       created: Date.now() / 1000, renderSeconds: +((performance.now() - started) / 1000).toFixed(1),
+      seed, tone: p.tone || "",
     };
     try { await store.put("items", { ...meta, blob }); } catch { /* stockage plein : on garde le résultat à l'écran */ }
     return { ...meta, src: srcFor(meta.id, blob) };

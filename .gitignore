@@ -6,3 +6,6 @@ engine/.venv/
 engine/data/
 __pycache__/
 .DS_Store
+engine/.venv-kokoro/
+engine/bin/
+*.log
