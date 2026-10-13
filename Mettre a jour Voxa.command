@@ -24,7 +24,7 @@ step "Voix de départ (Kokoro)"
 if ls engine/library/*/sample.wav >/dev/null 2>&1 && [ "$(ls engine/library/*/sample.wav | wc -l)" -ge 7 ]; then
   echo "déjà créées"
 else
-  CONS=$(mktemp); printf 'torch==2.2.2\ntorchaudio==2.2.2\nnumpy<2\n' > $CONS
+  CONS=$(mktemp); printf 'torch==2.2.2\ntorchaudio==2.2.2\nnumpy<2\ntransformers==4.46.3\n' > $CONS
   [ -d engine/.venv-kokoro ] || uv venv --python 3.11 engine/.venv-kokoro
   KPY=engine/.venv-kokoro/bin/python
   uv pip install --python $KPY pip
