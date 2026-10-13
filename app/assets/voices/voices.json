@@ -1,0 +1,114 @@
+[
+ {
+  "id": "lib-claire",
+  "name": "Claire",
+  "description": "Française, claire et chaleureuse. Idéale pour la pub et l'institutionnel.",
+  "gender": "femme",
+  "origin": "francaise",
+  "language": "fr",
+  "style": "naturelle",
+  "effect": null,
+  "tags": [
+   "voix de départ"
+  ],
+  "source": "kokoro",
+  "license": "Kokoro (Apache 2.0), voix issue du corpus SIWIS (CC BY 4.0)",
+  "file": "claire.wav"
+ },
+ {
+  "id": "lib-hugo",
+  "name": "Hugo",
+  "description": "Voix d'homme posée en français, timbre mûr et rassurant.",
+  "gender": "homme",
+  "origin": "francaise",
+  "language": "fr",
+  "style": "naturelle",
+  "effect": null,
+  "tags": [
+   "voix de départ"
+  ],
+  "source": "kokoro",
+  "license": "Kokoro (Apache 2.0)",
+  "file": "hugo.wav"
+ },
+ {
+  "id": "lib-grace",
+  "name": "Grace",
+  "description": "Américaine, souriante et naturelle. Pub, réseaux sociaux.",
+  "gender": "femme",
+  "origin": "anglaise-us",
+  "language": "en",
+  "style": "naturelle",
+  "effect": null,
+  "tags": [
+   "voix de départ"
+  ],
+  "source": "kokoro",
+  "license": "Kokoro (Apache 2.0)",
+  "file": "grace.wav"
+ },
+ {
+  "id": "lib-michael",
+  "name": "Michael",
+  "description": "Américain, dynamique et direct. Spots radio, annonces.",
+  "gender": "homme",
+  "origin": "anglaise-us",
+  "language": "en",
+  "style": "naturelle",
+  "effect": null,
+  "tags": [
+   "voix de départ"
+  ],
+  "source": "kokoro",
+  "license": "Kokoro (Apache 2.0)",
+  "file": "michael.wav"
+ },
+ {
+  "id": "lib-nathan",
+  "name": "Nathan",
+  "description": "Voix grave et profonde. Bandes-annonces, documentaire.",
+  "gender": "homme",
+  "origin": "anglaise-us",
+  "language": "en",
+  "style": "naturelle",
+  "effect": null,
+  "tags": [
+   "voix de départ"
+  ],
+  "source": "kokoro",
+  "license": "Kokoro (Apache 2.0)",
+  "file": "nathan.wav"
+ },
+ {
+  "id": "lib-emma",
+  "name": "Emma",
+  "description": "Britannique, élégante et posée. Luxe, institutionnel.",
+  "gender": "femme",
+  "origin": "anglaise-uk",
+  "language": "en",
+  "style": "naturelle",
+  "effect": null,
+  "tags": [
+   "voix de départ"
+  ],
+  "source": "kokoro",
+  "license": "Kokoro (Apache 2.0)",
+  "file": "emma.wav"
+ },
+ {
+  "id": "lib-george",
+  "name": "George",
+  "description": "Britannique, narrateur classique et crédible.",
+  "gender": "homme",
+  "origin": "anglaise-uk",
+  "language": "en",
+  "style": "naturelle",
+  "effect": null,
+  "tags": [
+   "voix de départ"
+  ],
+  "source": "kokoro",
+  "license": "Kokoro (Apache 2.0)",
+  "file": "george.wav"
+ }
+]

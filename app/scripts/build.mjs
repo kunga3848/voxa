@@ -10,4 +10,5 @@ mkdirSync(join(dist, "assets"), { recursive: true });
 cpSync(join(root, "index.html"), join(dist, "index.html"));
 cpSync(join(root, "src"), join(dist, "src"), { recursive: true });
 cpSync(join(root, "assets", "icon.svg"), join(dist, "assets", "icon.svg"));
+cpSync(join(root, "assets", "voices"), join(dist, "assets", "voices"), { recursive: true });
 console.log("Interface copiée dans dist/");
